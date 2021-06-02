@@ -8,6 +8,7 @@ type ActionCallback = func(data []byte)
 
 type WorkMessage struct {
 	Topic  string `json:"topic,omitempty"`
+	Last   int64  `json:"last,omitempty"`
 	Length int    `json:"length,omitempty"`
 	Data   []byte `json:"data,omitempty"`
 }
@@ -18,6 +19,10 @@ func (m WorkMessage) JSON() []byte {
 		return nil
 	}
 	return msg
+}
+
+func (m WorkMessage) String() string {
+	return string(m.JSON())
 }
 
 func ParseMessage(data []byte) (WorkMessage, error) {

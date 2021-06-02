@@ -10,6 +10,7 @@ import (
 
 type manage struct {
 	ctx        context.Context
+	cancel     context.CancelFunc
 	config     Config
 	nsqConfig  *nsq.Config
 	workerLock sync.RWMutex
@@ -80,7 +81,7 @@ func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
 		return
 	}
 	work = NewConsumeWork(m.config.RegisterName, channel, fn)
-	m.consumeWorker(work)
+	m.ConsumeWork(work)
 }
 
 func (m *manage) ConsumeWork(work Work) {
@@ -88,8 +89,22 @@ func (m *manage) ConsumeWork(work Work) {
 	go m.consumeWorker(work)
 }
 
-func (m *manage) StartWork() {
+func (m *manage) Start() {
 	go m.produceWorker()
+}
+
+func (m *manage) Stop() {
+	if m.cancel != nil {
+		m.cancel()
+		m.cancel = nil
+	}
+	for _, w := range m.Works() {
+		w.Stop()
+	}
+}
+
+func (m *manage) Wait() {
+	<-m.ctx.Done()
 }
 
 func (m *manage) RegisterClient(channel string, message WorkMessage, fn WorkActionFunc) {
@@ -110,12 +125,14 @@ func (m *manage) produceWorker() error {
 	for {
 		errPing := producer.Ping()
 		if errPing != nil {
+			fmt.Printf("faile ping:%+v\n", errPing)
 			break
 		}
 		select {
 		case <-m.ctx.Done():
 			return m.ctx.Err()
 		case work = <-m.workChan.Out:
+			fmt.Printf("send work:%+v\n", work)
 			err = producer.Publish(work.Topic(), work.Data())
 			if err != nil {
 				fmt.Println("err", err)
@@ -127,8 +144,10 @@ func (m *manage) produceWorker() error {
 }
 
 func initManage(ctx context.Context, config Config) Manager {
+	ctx, cancel := context.WithCancel(ctx)
 	return &manage{
 		ctx:       ctx,
+		cancel:    cancel,
 		config:    config,
 		nsqConfig: nsq.NewConfig(),
 		workers:   make(map[string]Work, 1),
@@ -149,7 +168,9 @@ type Manager interface {
 	Works() []Work
 	PublishWork(work Work)
 	StartRegisterServer(channel string, fn WorkActionFunc)
-	ConsumeWork(work Work)
-	StartWork()
 	RegisterClient(channel string, message WorkMessage, fn WorkActionFunc)
+	ConsumeWork(work Work)
+	Start()
+	Stop()
+	Wait()
 }
