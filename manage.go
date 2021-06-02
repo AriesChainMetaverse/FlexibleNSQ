@@ -127,7 +127,7 @@ func (m *manage) produceWorker() error {
 	return nil
 }
 
-func intiManage() *manage {
+func initManage() *manage {
 	return &manage{
 		registerName:    DefaultRegisterName,
 		nsqConfig:       nsq.NewConfig(),
