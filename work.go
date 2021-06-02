@@ -20,12 +20,21 @@ type work struct {
 	data       []byte
 }
 
-func NewWork(topic string, fn WorkActionFunc) Work {
+func NewPublishWork(topic string, message WorkMessage) Work {
+	return &work{
+		topic: topic,
+		data:  message.JSON(),
+	}
+}
+
+func NewConsumeWork(topic string, channel string, fn WorkActionFunc) Work {
 	return &work{
 		topic:      topic,
+		channel:    channel,
 		actionFunc: fn,
 	}
 }
+
 func (w *work) SetData(data []byte) {
 	w.data = data
 }

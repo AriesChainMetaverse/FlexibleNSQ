@@ -88,13 +88,21 @@ func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
 	if b {
 		return
 	}
-	work = NewWork(DefaultRegisterName, fn)
+	work = NewConsumeWork(DefaultRegisterName, channel, fn)
+	m.consumeWorker(work)
+}
+
+func (m *manage) ConsumeWork(work Work) {
 	m.RegistryWorker(work)
 	go m.consumeWorker(work)
 }
 
-func (m *manage) StartRegisterClient() {
+func (m *manage) StartRegisterClient(channel string, message WorkMessage, fn WorkActionFunc) {
+	work := NewPublishWork(DefaultRegisterName, message)
+	m.PublishWork(work)
 
+	work = NewConsumeWork(message.Topic, channel, fn)
+	m.ConsumeWork(work)
 }
 
 func (m *manage) produceWorker() error {
