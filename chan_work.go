@@ -2,34 +2,34 @@ package fnsq
 
 var ChanBufferMax = 2048
 
-// interactionChan is an unbounded chan.
+// WorkChan is an unbounded chan.
 // In is used to write without blocking, which supports multiple writers.
 // and Out is used to read, wich supports multiple readers.
 // You can close the in channel if you want.
-type interactionChan struct {
-	In     chan<- Interaction // channel for write
-	Out    <-chan Interaction // channel for read
-	buffer []Interaction      // buffer
+type WorkChan struct {
+	In     chan<- Work // channel for write
+	Out    <-chan Work // channel for read
+	buffer []Work      // buffer
 }
 
 // Len returns len of Out plus len of buffer.
-func (c interactionChan) Len() int {
+func (c WorkChan) Len() int {
 	return len(c.buffer) + len(c.Out)
 }
 
 // BufLen returns len of the buffer.
-func (c interactionChan) BufLen() int {
+func (c WorkChan) BufLen() int {
 	return len(c.buffer)
 }
 
-// NewinteractionChan creates the unbounded chan.
+// NewWorkChan creates the unbounded chan.
 // in is used to write without blocking, which supports multiple writers.
 // and out is used to read, wich supports multiple readers.
 // You can close the in channel if you want.
-func NewinteractionChan(initCapacity int) *interactionChan {
-	in := make(chan Interaction, initCapacity)
-	out := make(chan Interaction, initCapacity)
-	ch := &interactionChan{In: in, Out: out, buffer: make([]Interaction, 0, initCapacity)}
+func NewWorkChan(initCapacity int) *WorkChan {
+	in := make(chan Work, initCapacity)
+	out := make(chan Work, initCapacity)
+	ch := &WorkChan{In: in, Out: out, buffer: make([]Work, 0, initCapacity)}
 
 	go func() {
 		defer close(out)
@@ -62,7 +62,7 @@ func NewinteractionChan(initCapacity int) *interactionChan {
 				case out <- ch.buffer[0]:
 					ch.buffer = ch.buffer[1:]
 					if len(ch.buffer) == 0 { // after burst
-						ch.buffer = make([]Interaction, 0, initCapacity)
+						ch.buffer = make([]Work, 0, initCapacity)
 					}
 				}
 			}

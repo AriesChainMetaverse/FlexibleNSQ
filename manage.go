@@ -1,6 +1,7 @@
 package fnsq
 
 import (
+	"context"
 	"sync"
 
 	"github.com/nsqio/go-nsq"
@@ -9,13 +10,14 @@ import (
 var DefaultRegisterName = "register"
 
 type manage struct {
-	nsqConfig       *nsq.Config
-	registerName    string
-	producerAddr    string //"127.0.0.1:4150"
-	consumeAddr     string //"127.0.0.1:4160"
-	workerLock      sync.RWMutex
-	workers         map[string]Work
-	interactionChan *interactionChan
+	ctx          context.Context
+	nsqConfig    *nsq.Config
+	registerName string
+	producerAddr string //"127.0.0.1:4150"
+	consumeAddr  string //"127.0.0.1:4160"
+	workerLock   sync.RWMutex
+	workers      map[string]Work
+	workChan     *WorkChan
 }
 
 func (m *manage) RegisterName() string {
@@ -77,8 +79,8 @@ func (m *manage) consumeWorker(work Work) error {
 	return nil
 }
 
-func (m *manage) Publish(interaction Interaction) {
-	m.interactionChan.In <- interaction
+func (m *manage) PublishWork(work Work) {
+	m.workChan.In <- work
 }
 
 func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
@@ -86,10 +88,7 @@ func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
 	if b {
 		return
 	}
-	work = NewWork(Interaction{
-		Topic:   DefaultRegisterName,
-		Channel: channel,
-	}, fn)
+	work = NewWork(DefaultRegisterName, fn)
 	m.RegistryWorker(work)
 	go m.consumeWorker(work)
 }
@@ -104,34 +103,32 @@ func (m *manage) produceWorker() error {
 		return err
 	}
 	defer producer.Stop()
-	//var producerData string
-	//var interaction Interaction
+	var work Work
 	for {
 		errPing := producer.Ping()
 		if errPing != nil {
 			break
 		}
+		select {
+		case <-m.ctx.Done():
+			return m.ctx.Err()
+		case work = <-m.workChan.Out:
+			err = producer.Publish(work.Topic(), work.Data())
+			if err != nil {
+				continue
+			}
+		}
 
-		//select {
-		//case producerData = <-m.producerChan.Out:
-		//interaction, err = ParseInteraction(producerData)
-		//if err != nil {
-		//	continue
-		//}
-		//err = producer.Publish(interaction.Topic, interaction.Data)
-		//if err != nil {
-		//	continue
-		//}
-		//}
 	}
 	return nil
 }
 
-func initManage() *manage {
+func initManage(ctx context.Context) *manage {
 	return &manage{
-		registerName:    DefaultRegisterName,
-		nsqConfig:       nsq.NewConfig(),
-		producerAddr:    "",
-		interactionChan: NewinteractionChan(5),
+		ctx:          ctx,
+		registerName: DefaultRegisterName,
+		nsqConfig:    nsq.NewConfig(),
+		producerAddr: "",
+		workChan:     NewWorkChan(5),
 	}
 }
