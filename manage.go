@@ -6,14 +6,32 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
+var DefaultRegisterName = "register"
+
 type manage struct {
-	//Producer
 	nsqConfig       *nsq.Config
+	registerName    string
 	producerAddr    string //"127.0.0.1:4150"
 	consumeAddr     string //"127.0.0.1:4160"
 	workerLock      sync.RWMutex
 	workers         map[string]Work
 	interactionChan *interactionChan
+}
+
+func (m *manage) RegisterName() string {
+	return m.registerName
+}
+
+func (m *manage) SetRegisterName(registerName string) {
+	m.registerName = registerName
+}
+
+func (m *manage) NsqConfig() *nsq.Config {
+	return m.nsqConfig
+}
+
+func (m *manage) SetNsqConfig(nsqConfig *nsq.Config) {
+	m.nsqConfig = nsqConfig
 }
 
 func (m *manage) RegistryWorker(work Work) Work {
@@ -51,10 +69,7 @@ func (m *manage) consumeWorker(work Work) error {
 	if err != nil {
 		return err
 	}
-	consumer.AddHandler(nsq.HandlerFunc(func(msg *nsq.Message) error {
-		work.Call(msg)
-		return nil
-	}))
+	consumer.AddHandler(work)
 	err = consumer.ConnectToNSQLookupd(m.consumeAddr)
 	if err != nil {
 		return err
@@ -66,8 +81,17 @@ func (m *manage) Publish(interaction Interaction) {
 	m.interactionChan.In <- interaction
 }
 
-func (m *manage) StartRegisterServer() {
-
+func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
+	work, b := m.Work(DefaultRegisterName)
+	if b {
+		return
+	}
+	work = NewWork(Interaction{
+		Topic:   DefaultRegisterName,
+		Channel: channel,
+	}, fn)
+	m.RegistryWorker(work)
+	go m.consumeWorker(work)
 }
 
 func (m *manage) StartRegisterClient() {
@@ -105,6 +129,7 @@ func (m *manage) produceWorker() error {
 
 func intiManage() *manage {
 	return &manage{
+		registerName:    DefaultRegisterName,
 		nsqConfig:       nsq.NewConfig(),
 		producerAddr:    "",
 		interactionChan: NewinteractionChan(5),
