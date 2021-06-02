@@ -20,6 +20,22 @@ type manage struct {
 	workChan     *WorkChan
 }
 
+func (m *manage) ProducerAddr() string {
+	return m.producerAddr
+}
+
+func (m *manage) SetProducerAddr(producerAddr string) {
+	m.producerAddr = producerAddr
+}
+
+func (m *manage) ConsumeAddr() string {
+	return m.consumeAddr
+}
+
+func (m *manage) SetConsumeAddr(consumeAddr string) {
+	m.consumeAddr = consumeAddr
+}
+
 func (m *manage) RegisterName() string {
 	return m.registerName
 }
@@ -143,4 +159,21 @@ func initManage(ctx context.Context, registerName string) *manage {
 		producerAddr: "",
 		workChan:     NewWorkChan(5),
 	}
+}
+
+func NewManager(ctx context.Context, register string) Manager {
+	return initManage(ctx, register)
+}
+
+type Manager interface {
+	NsqConfig() *nsq.Config
+	SetNsqConfig(nsqConfig *nsq.Config)
+	RegistryWorker(work Work) Work
+	Work(topic string) (Work, bool)
+	DestroyWork(work Work)
+	Works() []Work
+	PublishWork(work Work)
+	StartRegisterServer(channel string, fn WorkActionFunc)
+	ConsumeWork(work Work)
+	StartRegisterClient(channel string, message WorkMessage, fn WorkActionFunc)
 }
