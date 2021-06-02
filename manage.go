@@ -7,7 +7,7 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
-var DefaultRegisterName = "register"
+const DefaultRegisterName = "register"
 
 type manage struct {
 	ctx          context.Context
@@ -86,11 +86,11 @@ func (m *manage) PublishWork(work Work) {
 }
 
 func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
-	work, b := m.Work(DefaultRegisterName)
+	work, b := m.Work(m.registerName)
 	if b {
 		return
 	}
-	work = NewConsumeWork(DefaultRegisterName, channel, fn)
+	work = NewConsumeWork(m.registerName, channel, fn)
 	m.consumeWorker(work)
 }
 
@@ -132,7 +132,10 @@ func (m *manage) produceWorker() error {
 	return nil
 }
 
-func initManage(ctx context.Context) *manage {
+func initManage(ctx context.Context, registerName string) *manage {
+	if registerName == "" {
+		registerName = DefaultRegisterName
+	}
 	return &manage{
 		ctx:          ctx,
 		registerName: DefaultRegisterName,
