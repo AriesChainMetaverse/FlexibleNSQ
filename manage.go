@@ -45,6 +45,7 @@ func (m *manage) DestroyWork(work Work) {
 	m.workerLock.Lock()
 	delete(m.workers, work.Topic())
 	m.workerLock.Unlock()
+	work.Stop()
 }
 
 func (m *manage) Works() []Work {
@@ -80,12 +81,14 @@ func (m *manage) PublishWork(work Work) {
 	m.workChan.In <- work
 }
 
-func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
-	_, b := m.Work(m.config.RegisterName)
+func (m *manage) StartRegisterServer(channel string) Work {
+	work, b := m.Work(m.config.RegisterName)
 	if b {
-		return
+		return work
 	}
-	m.ConsumeWork(NewConsumeWork(m.config.RegisterName, channel, fn), 0)
+	work = NewConsumeWork(m.config.RegisterName, channel)
+	m.ConsumeWork(work, 0)
+	return work
 }
 
 func (m *manage) ConsumeWork(work Work, delay int) {
@@ -124,11 +127,12 @@ func (m *manage) Wait() {
 	<-m.ctx.Done()
 }
 
-func (m *manage) RegisterClient(channel string, message WorkMessage, fn WorkActionFunc) {
+func (m *manage) RegisterClient(channel string, message WorkMessage) Work {
 	m.PublishWork(NewPublishWork(m.config.RegisterName, message))
 
-	m.ConsumeWork(NewConsumeWork(message.Topic, channel, fn), 5)
-
+	work := NewConsumeWork(message.Topic, channel)
+	m.ConsumeWork(work, 5)
+	return work
 }
 
 func (m *manage) produceWorker() error {
@@ -183,8 +187,8 @@ type Manager interface {
 	DestroyWork(work Work)
 	Works() []Work
 	PublishWork(work Work)
-	StartRegisterServer(channel string, fn WorkActionFunc)
-	RegisterClient(channel string, message WorkMessage, fn WorkActionFunc)
+	StartRegisterServer(channel string) Work
+	RegisterClient(channel string, message WorkMessage) Work
 	ConsumeWork(work Work, delay int)
 	Start()
 	Stop()

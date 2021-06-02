@@ -1,6 +1,9 @@
 package fnsq
 
 import (
+	"errors"
+	"time"
+
 	"github.com/nsqio/go-nsq"
 )
 
@@ -11,21 +14,21 @@ type Work interface {
 	Topic() string
 	Channel() string
 	HandleMessage(msg *nsq.Message) error
-	ActionFunc() WorkActionFunc
+	Message() <-chan *nsq.Message
 	Data() []byte
 	Stop()
 }
 
 type work struct {
-	consumer   *nsq.Consumer
-	actionFunc WorkActionFunc
-	topic      string
-	channel    string
-	data       []byte
+	consumer *nsq.Consumer
+	message  chan *nsq.Message
+	topic    string
+	channel  string
+	data     []byte
 }
 
-func (w *work) ActionFunc() WorkActionFunc {
-	return w.actionFunc
+func (w *work) Message() <-chan *nsq.Message {
+	return w.message
 }
 
 func (w *work) Consumer(config *nsq.Config) (*nsq.Consumer, error) {
@@ -50,16 +53,17 @@ func (w *work) Stop() {
 
 func NewPublishWork(topic string, message WorkMessage) Work {
 	return &work{
-		topic: topic,
-		data:  message.JSON(),
+		topic:   topic,
+		message: make(chan *nsq.Message),
+		data:    message.JSON(),
 	}
 }
 
-func NewConsumeWork(topic string, channel string, fn WorkActionFunc) Work {
+func NewConsumeWork(topic string, channel string) Work {
 	return &work{
-		topic:      topic,
-		channel:    channel,
-		actionFunc: fn,
+		topic:   topic,
+		message: make(chan *nsq.Message),
+		channel: channel,
 	}
 }
 
@@ -79,10 +83,6 @@ func (w work) Channel() string {
 	return w.channel
 }
 
-func (w *work) SetActionFunc(actionFunc WorkActionFunc) {
-	w.actionFunc = actionFunc
-}
-
 func (w *work) SetTopic(topic string) {
 	w.topic = topic
 }
@@ -92,8 +92,12 @@ func (w *work) SetChannel(channel string) {
 }
 
 func (w work) HandleMessage(msg *nsq.Message) error {
-	if w.actionFunc != nil {
-		return w.actionFunc(msg)
+	t := time.NewTimer(5 * time.Second)
+	defer t.Stop()
+	select {
+	case w.message <- msg:
+	case <-t.C:
+		return errors.New("input time out")
 	}
 	return nil
 }
