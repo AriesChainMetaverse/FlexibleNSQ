@@ -2,6 +2,7 @@ package fnsq
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/nsqio/go-nsq"
@@ -87,7 +88,11 @@ func (m *manage) ConsumeWork(work Work) {
 	go m.consumeWorker(work)
 }
 
-func (m *manage) StartRegisterClient(channel string, message WorkMessage, fn WorkActionFunc) {
+func (m *manage) StartWork() {
+	go m.produceWorker()
+}
+
+func (m *manage) RegisterClient(channel string, message WorkMessage, fn WorkActionFunc) {
 	work := NewPublishWork(m.config.RegisterName, message)
 	m.PublishWork(work)
 
@@ -113,6 +118,7 @@ func (m *manage) produceWorker() error {
 		case work = <-m.workChan.Out:
 			err = producer.Publish(work.Topic(), work.Data())
 			if err != nil {
+				fmt.Println("err", err)
 				continue
 			}
 		}
@@ -125,6 +131,7 @@ func initManage(ctx context.Context, config Config) Manager {
 		ctx:       ctx,
 		config:    config,
 		nsqConfig: nsq.NewConfig(),
+		workers:   make(map[string]Work, 1),
 		workChan:  NewWorkChan(5),
 	}
 }
@@ -143,5 +150,6 @@ type Manager interface {
 	PublishWork(work Work)
 	StartRegisterServer(channel string, fn WorkActionFunc)
 	ConsumeWork(work Work)
-	StartRegisterClient(channel string, message WorkMessage, fn WorkActionFunc)
+	StartWork()
+	RegisterClient(channel string, message WorkMessage, fn WorkActionFunc)
 }
