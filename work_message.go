@@ -30,3 +30,11 @@ func ParseMessage(data []byte) (WorkMessage, error) {
 	err := json.Unmarshal(data, &in)
 	return in, err
 }
+
+func (m WorkMessage) Work(data []byte, last int64) Work {
+	return NewPublishWork(m.Topic, WorkMessage{
+		Last:   last,
+		Length: len(data),
+		Data:   data,
+	})
+}

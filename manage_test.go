@@ -33,10 +33,7 @@ func TestManage_StartRegisterServer(t *testing.T) {
 		}
 		fmt.Println("msg", message, "data", string(message.Data))
 		str := "hello world server"
-		manage.PublishWork(fnsq.NewPublishWork(message.Topic, fnsq.WorkMessage{
-			Length: len(str),
-			Data:   []byte(str),
-		}))
+		manage.PublishWork(message.Work([]byte(str), 0))
 		return nil
 	})
 	manage.Wait()
@@ -49,12 +46,11 @@ func TestManage_StartRegisterClient(t *testing.T) {
 		time.Sleep(100 * time.Second)
 		manage.Stop()
 	}()
-	manage.RegisterClient("test2", fnsq.WorkMessage{
-		Topic:  "t2",
+	manage.RegisterClient("client1", fnsq.WorkMessage{
+		Topic:  "t1",
 		Length: len(str),
 		Data:   []byte(str),
 	}, func(msg *nsq.Message) error {
-
 		message, err := fnsq.ParseMessage(msg.Body)
 		if err != nil {
 			return err
@@ -62,5 +58,6 @@ func TestManage_StartRegisterClient(t *testing.T) {
 		fmt.Println("t2msg", message, "data", string(message.Data))
 		return nil
 	})
+
 	manage.Wait()
 }

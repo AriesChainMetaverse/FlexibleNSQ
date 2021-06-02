@@ -7,12 +7,13 @@ import (
 type WorkActionFunc = func(msg *nsq.Message) error
 
 type Work interface {
+	AddConsumer(consumer *nsq.Consumer)
 	Topic() string
 	Channel() string
 	HandleMessage(msg *nsq.Message) error
+	ActionFunc() WorkActionFunc
 	Data() []byte
 	Stop()
-	AddConsumer(consumer *nsq.Consumer)
 }
 
 type work struct {
@@ -21,6 +22,10 @@ type work struct {
 	topic      string
 	channel    string
 	data       []byte
+}
+
+func (w *work) ActionFunc() WorkActionFunc {
+	return w.actionFunc
 }
 
 func (w *work) AddConsumer(consumer *nsq.Consumer) {
