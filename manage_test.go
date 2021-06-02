@@ -3,6 +3,7 @@ package fnsq_test
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -46,18 +47,19 @@ func TestManage_StartRegisterClient(t *testing.T) {
 		time.Sleep(100 * time.Second)
 		manage.Stop()
 	}()
-	manage.RegisterClient("client1", fnsq.WorkMessage{
-		Topic:  "t5",
-		Length: len(str),
-		Data:   []byte(str),
-	}, func(msg *nsq.Message) error {
-		message, err := fnsq.ParseMessage(msg.Body)
-		if err != nil {
-			return err
-		}
-		fmt.Println("t2msg", message, "data", string(message.Data))
-		return nil
-	})
-
+	for i := 0; i < 100; i++ {
+		manage.RegisterClient("client1", fnsq.WorkMessage{
+			Topic:  "rnd" + strconv.Itoa(i),
+			Length: len(str),
+			Data:   []byte(str),
+		}, func(msg *nsq.Message) error {
+			message, err := fnsq.ParseMessage(msg.Body)
+			if err != nil {
+				return err
+			}
+			fmt.Println(message.Topic, message, "data", string(message.Data))
+			return nil
+		})
+	}
 	manage.Wait()
 }

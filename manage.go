@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/nsqio/go-nsq"
 )
@@ -61,11 +62,18 @@ func (m *manage) consumeWorker(work Work) error {
 	if err != nil {
 		return err
 	}
-	err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
-	if err != nil {
-		return err
+	for {
+		select {
+		case <-m.ctx.Done():
+		default:
+			err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
+			if err != nil {
+				continue
+			}
+		}
+
 	}
-	return nil
+
 }
 
 func (m *manage) PublishWork(work Work) {
@@ -73,17 +81,29 @@ func (m *manage) PublishWork(work Work) {
 }
 
 func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
-	work, b := m.Work(m.config.RegisterName)
+	_, b := m.Work(m.config.RegisterName)
 	if b {
 		return
 	}
-	work = NewConsumeWork(m.config.RegisterName, channel, fn)
-	m.ConsumeWork(work)
+	m.ConsumeWork(NewConsumeWork(m.config.RegisterName, channel, fn), 0)
 }
 
-func (m *manage) ConsumeWork(work Work) {
+func (m *manage) ConsumeWork(work Work, delay int) {
 	m.RegistryWorker(work)
-	go m.consumeWorker(work)
+
+	go func(delay int) {
+		if delay != 0 {
+			t := time.NewTimer(time.Duration(delay) * time.Second)
+			defer t.Stop()
+			select {
+			case <-t.C:
+				m.consumeWorker(work)
+			}
+		} else {
+			m.consumeWorker(work)
+		}
+	}(delay)
+
 }
 
 func (m *manage) Start() {
@@ -105,11 +125,10 @@ func (m *manage) Wait() {
 }
 
 func (m *manage) RegisterClient(channel string, message WorkMessage, fn WorkActionFunc) {
-	work := NewPublishWork(m.config.RegisterName, message)
-	m.PublishWork(work)
+	m.PublishWork(NewPublishWork(m.config.RegisterName, message))
 
-	work = NewConsumeWork(message.Topic, channel, fn)
-	m.ConsumeWork(work)
+	m.ConsumeWork(NewConsumeWork(message.Topic, channel, fn), 5)
+
 }
 
 func (m *manage) produceWorker() error {
@@ -166,7 +185,7 @@ type Manager interface {
 	PublishWork(work Work)
 	StartRegisterServer(channel string, fn WorkActionFunc)
 	RegisterClient(channel string, message WorkMessage, fn WorkActionFunc)
-	ConsumeWork(work Work)
+	ConsumeWork(work Work, delay int)
 	Start()
 	Stop()
 	Wait()

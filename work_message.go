@@ -33,6 +33,7 @@ func ParseMessage(data []byte) (WorkMessage, error) {
 
 func (m WorkMessage) Work(data []byte, last int64) Work {
 	return NewPublishWork(m.Topic, WorkMessage{
+		Topic:  m.Topic,
 		Last:   last,
 		Length: len(data),
 		Data:   data,
