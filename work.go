@@ -54,7 +54,7 @@ func (w *work) Stop() {
 func NewPublishWork(topic string, message WorkMessage) Work {
 	return &work{
 		topic:   topic,
-		message: make(chan *nsq.Message),
+		message: make(chan *nsq.Message, 1024),
 		data:    message.JSON(),
 	}
 }
@@ -62,7 +62,7 @@ func NewPublishWork(topic string, message WorkMessage) Work {
 func NewConsumeWork(topic string, channel string) Work {
 	return &work{
 		topic:   topic,
-		message: make(chan *nsq.Message),
+		message: make(chan *nsq.Message, 1024),
 		channel: channel,
 	}
 }
