@@ -7,41 +7,13 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
-const DefaultRegisterName = "register"
-
 type manage struct {
-	ctx          context.Context
-	nsqConfig    *nsq.Config
-	registerName string
-	producerAddr string //"127.0.0.1:4150"
-	consumeAddr  string //"127.0.0.1:4160"
-	workerLock   sync.RWMutex
-	workers      map[string]Work
-	workChan     *WorkChan
-}
-
-func (m *manage) ProducerAddr() string {
-	return m.producerAddr
-}
-
-func (m *manage) SetProducerAddr(producerAddr string) {
-	m.producerAddr = producerAddr
-}
-
-func (m *manage) ConsumeAddr() string {
-	return m.consumeAddr
-}
-
-func (m *manage) SetConsumeAddr(consumeAddr string) {
-	m.consumeAddr = consumeAddr
-}
-
-func (m *manage) RegisterName() string {
-	return m.registerName
-}
-
-func (m *manage) SetRegisterName(registerName string) {
-	m.registerName = registerName
+	ctx        context.Context
+	config     Config
+	nsqConfig  *nsq.Config
+	workerLock sync.RWMutex
+	workers    map[string]Work
+	workChan   *WorkChan
 }
 
 func (m *manage) NsqConfig() *nsq.Config {
@@ -90,7 +62,7 @@ func (m *manage) consumeWorker(work Work) error {
 
 	work.AddConsumer(consumer)
 	consumer.AddHandler(work)
-	err = consumer.ConnectToNSQLookupd(m.consumeAddr)
+	err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
 	if err != nil {
 		return err
 	}
@@ -102,11 +74,11 @@ func (m *manage) PublishWork(work Work) {
 }
 
 func (m *manage) StartRegisterServer(channel string, fn WorkActionFunc) {
-	work, b := m.Work(m.registerName)
+	work, b := m.Work(m.config.RegisterName)
 	if b {
 		return
 	}
-	work = NewConsumeWork(m.registerName, channel, fn)
+	work = NewConsumeWork(m.config.RegisterName, channel, fn)
 	m.consumeWorker(work)
 }
 
@@ -124,7 +96,7 @@ func (m *manage) StartRegisterClient(channel string, message WorkMessage, fn Wor
 }
 
 func (m *manage) produceWorker() error {
-	producer, err := nsq.NewProducer(m.producerAddr, m.nsqConfig)
+	producer, err := nsq.NewProducer(m.config.ProducerAddr, m.nsqConfig)
 	if err != nil {
 		return err
 	}
@@ -148,21 +120,17 @@ func (m *manage) produceWorker() error {
 	return nil
 }
 
-func initManage(ctx context.Context, registerName string) *manage {
-	if registerName == "" {
-		registerName = DefaultRegisterName
-	}
+func initManage(ctx context.Context, config Config) Manager {
 	return &manage{
-		ctx:          ctx,
-		registerName: DefaultRegisterName,
-		nsqConfig:    nsq.NewConfig(),
-		producerAddr: "",
-		workChan:     NewWorkChan(5),
+		ctx:       ctx,
+		config:    config,
+		nsqConfig: nsq.NewConfig(),
+		workChan:  NewWorkChan(5),
 	}
 }
 
-func NewManager(ctx context.Context, register string) Manager {
-	return initManage(ctx, register)
+func NewManager(ctx context.Context, config Config) Manager {
+	return initManage(ctx, config)
 }
 
 type Manager interface {
