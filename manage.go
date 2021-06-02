@@ -71,6 +71,8 @@ func (m *manage) consumeWorker(work Work) error {
 	if err != nil {
 		return err
 	}
+
+	work.AddConsumer(consumer)
 	consumer.AddHandler(work)
 	err = consumer.ConnectToNSQLookupd(m.consumeAddr)
 	if err != nil {
@@ -126,7 +128,6 @@ func (m *manage) produceWorker() error {
 				continue
 			}
 		}
-
 	}
 	return nil
 }

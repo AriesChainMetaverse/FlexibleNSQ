@@ -11,13 +11,27 @@ type Work interface {
 	Channel() string
 	HandleMessage(msg *nsq.Message) error
 	Data() []byte
+	Stop()
+	AddConsumer(consumer *nsq.Consumer)
 }
 
 type work struct {
+	consumer   *nsq.Consumer
 	actionFunc WorkActionFunc
 	topic      string
 	channel    string
 	data       []byte
+}
+
+func (w *work) AddConsumer(consumer *nsq.Consumer) {
+	w.consumer = consumer
+}
+
+func (w *work) Stop() {
+	if w.consumer != nil {
+		w.consumer.Stop()
+		w.consumer = nil
+	}
 }
 
 func NewPublishWork(topic string, message WorkMessage) Work {
