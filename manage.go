@@ -88,7 +88,7 @@ func (m *manage) ConsumeWork(work Work) {
 }
 
 func (m *manage) StartRegisterClient(channel string, message WorkMessage, fn WorkActionFunc) {
-	work := NewPublishWork(DefaultRegisterName, message)
+	work := NewPublishWork(m.config.RegisterName, message)
 	m.PublishWork(work)
 
 	work = NewConsumeWork(message.Topic, channel, fn)
