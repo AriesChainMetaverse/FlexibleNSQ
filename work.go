@@ -7,7 +7,7 @@ import (
 type WorkActionFunc = func(msg *nsq.Message) error
 
 type Work interface {
-	AddConsumer(consumer *nsq.Consumer)
+	Consumer(config *nsq.Config) (*nsq.Consumer, error)
 	Topic() string
 	Channel() string
 	HandleMessage(msg *nsq.Message) error
@@ -28,8 +28,17 @@ func (w *work) ActionFunc() WorkActionFunc {
 	return w.actionFunc
 }
 
-func (w *work) AddConsumer(consumer *nsq.Consumer) {
-	w.consumer = consumer
+func (w *work) Consumer(config *nsq.Config) (*nsq.Consumer, error) {
+	if w.consumer != nil {
+		return w.consumer, nil
+	}
+	var err error
+	w.consumer, err = nsq.NewConsumer(w.Topic(), w.Channel(), config)
+	if err != nil {
+		return nil, err
+	}
+	w.consumer.AddHandler(w)
+	return w.consumer, nil
 }
 
 func (w *work) Stop() {

@@ -57,13 +57,10 @@ func (m *manage) Works() []Work {
 }
 
 func (m *manage) consumeWorker(work Work) error {
-	consumer, err := nsq.NewConsumer(work.Topic(), work.Channel(), m.nsqConfig)
+	consumer, err := work.Consumer(m.nsqConfig)
 	if err != nil {
 		return err
 	}
-
-	work.AddConsumer(consumer)
-	consumer.AddHandler(work)
 	err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
 	if err != nil {
 		return err

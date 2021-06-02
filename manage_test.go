@@ -47,7 +47,7 @@ func TestManage_StartRegisterClient(t *testing.T) {
 		manage.Stop()
 	}()
 	manage.RegisterClient("client1", fnsq.WorkMessage{
-		Topic:  "t1",
+		Topic:  "t5",
 		Length: len(str),
 		Data:   []byte(str),
 	}, func(msg *nsq.Message) error {
