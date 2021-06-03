@@ -33,7 +33,7 @@ func (m *manage) addWorker(worker Worker) {
 	m.workerLock.Unlock()
 }
 
-func (m *manage) RegistryWorker(work Worker) (Worker, bool) {
+func (m *manage) registryWorker(work Worker) (Worker, bool) {
 	worker, b := m.Worker(work.Topic())
 	if b {
 		return worker, false
@@ -95,18 +95,24 @@ func (m *manage) PublishWorker(work Worker) {
 }
 
 func (m *manage) StartRegisterServer(channel string) Worker {
-	work, b := m.Worker(m.config.RegisterName)
+	return m.RegisterConsumeWorker(m.config.RegisterName, channel, 0)
+}
+
+func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) Worker {
+	work, b := m.registryWorker(NewConsumeWorker(topic, channel))
 	if b {
 		return work
 	}
-	work = NewConsumeWorker(m.config.RegisterName, channel)
-	m.ConsumeWorker(work, 0)
+	m.ConsumeWorker(work, delay)
 	return work
 }
 
-func (m *manage) ConsumeWorker(work Worker, delay int) {
-	m.RegistryWorker(work)
+func (m *manage) RegisterClient(channel string, message WorkMessage) Worker {
+	m.PublishWorker(NewPublishWorker(m.config.RegisterName, message))
+	return m.RegisterConsumeWorker(message.Topic, channel, 3)
+}
 
+func (m *manage) ConsumeWorker(work Worker, delay int) {
 	go func(delay int) {
 		if delay != 0 {
 			t := time.NewTimer(time.Duration(delay) * time.Second)
@@ -138,14 +144,6 @@ func (m *manage) Stop() {
 
 func (m *manage) Wait() {
 	<-m.ctx.Done()
-}
-
-func (m *manage) RegisterClient(channel string, message WorkMessage) Worker {
-	m.PublishWorker(NewPublishWorker(m.config.RegisterName, message))
-
-	work := NewConsumeWorker(message.Topic, channel)
-	m.ConsumeWorker(work, 5)
-	return work
 }
 
 func (m *manage) produceWorker() error {
@@ -195,7 +193,7 @@ func NewManager(ctx context.Context, config Config) Manager {
 type Manager interface {
 	NsqConfig() *nsq.Config
 	SetNSQConfig(nsqConfig *nsq.Config)
-	RegistryWorker(work Worker) (Worker, bool)
+	registryWorker(work Worker) (Worker, bool)
 	Worker(topic string) (Worker, bool)
 	DestroyWorker(topic string) bool
 	Workers() []Worker
