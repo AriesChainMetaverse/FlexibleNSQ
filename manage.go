@@ -42,6 +42,10 @@ func (m *manage) registryWorker(work Worker) (Worker, bool) {
 	return work, true
 }
 
+func (m *manage) RegisterName() string {
+	return m.config.RegisterName
+}
+
 func (m *manage) Worker(topic string) (Worker, bool) {
 	m.workerLock.RLock()
 	work, exist := m.workers[topic]
@@ -87,7 +91,6 @@ func (m *manage) consumeWorker(work Worker) error {
 		}
 
 	}
-
 }
 
 func (m *manage) PublishWorker(work Worker) {
@@ -129,6 +132,8 @@ func (m *manage) ConsumeWorker(work Worker, delay int) {
 }
 
 func (m *manage) Start() {
+	m.PublishWorker(NewPublishWorker(m.config.RegisterName, WorkMessage{}))
+	m.StartRegisterServer(m.config.RegisterName)
 	go m.produceWorker()
 }
 
