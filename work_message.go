@@ -43,10 +43,5 @@ func ParseMessage(data []byte) (WorkMessage, error) {
 }
 
 func (m WorkMessage) Work(data []byte, last int64) Worker {
-	return NewPublishWorker(m.Topic, WorkMessage{
-		Topic:  m.Topic,
-		Last:   last,
-		Length: len(data),
-		Data:   data,
-	})
+	return NewPublishWorker(m.Topic, NewWorkMessage(m.ID, m.Topic, last, data))
 }
