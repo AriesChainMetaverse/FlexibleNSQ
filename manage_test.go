@@ -25,7 +25,7 @@ func TestManage_StartRegisterServer(t *testing.T) {
 		time.Sleep(100 * time.Second)
 		manage.Stop()
 	}()
-	work := manage.StartRegisterServer("server1")
+	work := manage.RegisterServer("server1")
 	go func() {
 		for {
 			msg := <-work.Message()

@@ -19,7 +19,7 @@ type manage struct {
 	workChan   *WorkerChan
 }
 
-func (m *manage) NsqConfig() *nsq.Config {
+func (m *manage) NSQConfig() *nsq.Config {
 	return m.nsqConfig
 }
 
@@ -36,10 +36,10 @@ func (m *manage) addWorker(worker Worker) {
 func (m *manage) registryWorker(work Worker) (Worker, bool) {
 	worker, b := m.Worker(work.Topic())
 	if b {
-		return worker, false
+		return worker, true
 	}
 	m.addWorker(work)
-	return work, true
+	return work, false
 }
 
 func (m *manage) RegisterName() string {
@@ -97,8 +97,9 @@ func (m *manage) PublishWorker(work Worker) {
 	m.workChan.In <- work
 }
 
-func (m *manage) StartRegisterServer(channel string) Worker {
-	return m.RegisterConsumeWorker(m.config.RegisterName, channel, 0)
+func (m *manage) RegisterServer(channel string) Worker {
+	m.PublishWorker(NewPublishWorker(m.config.RegisterName, WorkMessage{}))
+	return m.RegisterConsumeWorker(m.config.RegisterName, channel, 3)
 }
 
 func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) Worker {
@@ -128,12 +129,9 @@ func (m *manage) ConsumeWorker(work Worker, delay int) {
 			m.consumeWorker(work)
 		}
 	}(delay)
-
 }
 
 func (m *manage) Start() {
-	m.PublishWorker(NewPublishWorker(m.config.RegisterName, WorkMessage{}))
-	m.StartRegisterServer(m.config.RegisterName)
 	go m.produceWorker()
 }
 
@@ -196,14 +194,14 @@ func NewManager(ctx context.Context, config Config) Manager {
 }
 
 type Manager interface {
-	NsqConfig() *nsq.Config
+	RegisterName() string
+	NSQConfig() *nsq.Config
 	SetNSQConfig(nsqConfig *nsq.Config)
-	registryWorker(work Worker) (Worker, bool)
 	Worker(topic string) (Worker, bool)
 	DestroyWorker(topic string) bool
 	Workers() []Worker
 	PublishWorker(work Worker)
-	StartRegisterServer(channel string) Worker
+	RegisterServer(channel string) Worker
 	RegisterClient(channel string, message WorkMessage) Worker
 	ConsumeWorker(work Worker, delay int)
 	Start()
