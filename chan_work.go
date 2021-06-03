@@ -2,23 +2,23 @@ package fnsq
 
 var ChanBufferMax = 2048
 
-// WorkChan is an unbounded chan.
+// WorkerChan is an unbounded chan.
 // In is used to write without blocking, which supports multiple writers.
 // and Out is used to read, wich supports multiple readers.
 // You can close the in channel if you want.
-type WorkChan struct {
-	In     chan<- Work // channel for write
-	Out    <-chan Work // channel for read
-	buffer []Work      // buffer
+type WorkerChan struct {
+	In     chan<- Worker // channel for write
+	Out    <-chan Worker // channel for read
+	buffer []Worker      // buffer
 }
 
 // Len returns len of Out plus len of buffer.
-func (c WorkChan) Len() int {
+func (c WorkerChan) Len() int {
 	return len(c.buffer) + len(c.Out)
 }
 
 // BufLen returns len of the buffer.
-func (c WorkChan) BufLen() int {
+func (c WorkerChan) BufLen() int {
 	return len(c.buffer)
 }
 
@@ -26,10 +26,10 @@ func (c WorkChan) BufLen() int {
 // in is used to write without blocking, which supports multiple writers.
 // and out is used to read, wich supports multiple readers.
 // You can close the in channel if you want.
-func NewWorkChan(initCapacity int) *WorkChan {
-	in := make(chan Work, initCapacity)
-	out := make(chan Work, initCapacity)
-	ch := &WorkChan{In: in, Out: out, buffer: make([]Work, 0, initCapacity)}
+func NewWorkChan(initCapacity int) *WorkerChan {
+	in := make(chan Worker, initCapacity)
+	out := make(chan Worker, initCapacity)
+	ch := &WorkerChan{In: in, Out: out, buffer: make([]Worker, 0, initCapacity)}
 
 	go func() {
 		defer close(out)
@@ -62,7 +62,7 @@ func NewWorkChan(initCapacity int) *WorkChan {
 				case out <- ch.buffer[0]:
 					ch.buffer = ch.buffer[1:]
 					if len(ch.buffer) == 0 { // after burst
-						ch.buffer = make([]Work, 0, initCapacity)
+						ch.buffer = make([]Worker, 0, initCapacity)
 					}
 				}
 			}

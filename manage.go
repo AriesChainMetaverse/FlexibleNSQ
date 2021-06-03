@@ -15,8 +15,8 @@ type manage struct {
 	config     Config
 	nsqConfig  *nsq.Config
 	workerLock sync.RWMutex
-	workers    map[string]Work
-	workChan   *WorkChan
+	workers    map[string]Worker
+	workChan   *WorkerChan
 }
 
 func (m *manage) NsqConfig() *nsq.Config {
@@ -27,29 +27,42 @@ func (m *manage) SetNSQConfig(nsqConfig *nsq.Config) {
 	m.nsqConfig = nsqConfig
 }
 
-func (m *manage) RegistryWorker(work Work) Work {
+func (m *manage) addWorker(worker Worker) {
 	m.workerLock.Lock()
-	m.workers[work.Topic()] = work
+	m.workers[worker.Topic()] = worker
 	m.workerLock.Unlock()
-	return work
 }
 
-func (m *manage) Work(topic string) (Work, bool) {
+func (m *manage) RegistryWorker(work Worker) (Worker, bool) {
+	worker, b := m.Worker(work.Topic())
+	if b {
+		return worker, false
+	}
+	m.addWorker(work)
+	return work, true
+}
+
+func (m *manage) Worker(topic string) (Worker, bool) {
 	m.workerLock.RLock()
 	work, exist := m.workers[topic]
 	m.workerLock.RUnlock()
 	return work, exist
 }
 
-func (m *manage) DestroyWork(work Work) {
+func (m *manage) DestroyWorker(topic string) bool {
+	workers, exist := m.Worker(topic)
+	if !exist {
+		return false
+	}
 	m.workerLock.Lock()
-	delete(m.workers, work.Topic())
+	delete(m.workers, topic)
 	m.workerLock.Unlock()
-	work.Stop()
+	workers.Stop()
+	return true
 }
 
-func (m *manage) Works() []Work {
-	var works []Work
+func (m *manage) Workers() []Worker {
+	var works []Worker
 	m.workerLock.Lock()
 	for i := range m.workers {
 		works = append(works, m.workers[i])
@@ -58,7 +71,7 @@ func (m *manage) Works() []Work {
 	return works
 }
 
-func (m *manage) consumeWorker(work Work) error {
+func (m *manage) consumeWorker(work Worker) error {
 	consumer, err := work.Consumer(m.nsqConfig)
 	if err != nil {
 		return err
@@ -77,21 +90,21 @@ func (m *manage) consumeWorker(work Work) error {
 
 }
 
-func (m *manage) PublishWork(work Work) {
+func (m *manage) PublishWorker(work Worker) {
 	m.workChan.In <- work
 }
 
-func (m *manage) StartRegisterServer(channel string) Work {
-	work, b := m.Work(m.config.RegisterName)
+func (m *manage) StartRegisterServer(channel string) Worker {
+	work, b := m.Worker(m.config.RegisterName)
 	if b {
 		return work
 	}
 	work = NewConsumeWork(m.config.RegisterName, channel)
-	m.ConsumeWork(work, 0)
+	m.ConsumeWorker(work, 0)
 	return work
 }
 
-func (m *manage) ConsumeWork(work Work, delay int) {
+func (m *manage) ConsumeWorker(work Worker, delay int) {
 	m.RegistryWorker(work)
 
 	go func(delay int) {
@@ -118,7 +131,7 @@ func (m *manage) Stop() {
 		m.cancel()
 		m.cancel = nil
 	}
-	for _, w := range m.Works() {
+	for _, w := range m.Workers() {
 		w.Stop()
 	}
 }
@@ -127,11 +140,11 @@ func (m *manage) Wait() {
 	<-m.ctx.Done()
 }
 
-func (m *manage) RegisterClient(channel string, message WorkMessage) Work {
-	m.PublishWork(NewPublishWork(m.config.RegisterName, message))
+func (m *manage) RegisterClient(channel string, message WorkMessage) Worker {
+	m.PublishWorker(NewPublishWork(m.config.RegisterName, message))
 
 	work := NewConsumeWork(message.Topic, channel)
-	m.ConsumeWork(work, 5)
+	m.ConsumeWorker(work, 5)
 	return work
 }
 
@@ -141,7 +154,7 @@ func (m *manage) produceWorker() error {
 		return err
 	}
 	defer producer.Stop()
-	var work Work
+	var work Worker
 	for {
 		errPing := producer.Ping()
 		if errPing != nil {
@@ -170,7 +183,7 @@ func initManage(ctx context.Context, config Config) Manager {
 		cancel:    cancel,
 		config:    config,
 		nsqConfig: nsq.NewConfig(),
-		workers:   make(map[string]Work, 1),
+		workers:   make(map[string]Worker, 1),
 		workChan:  NewWorkChan(5),
 	}
 }
@@ -182,14 +195,14 @@ func NewManager(ctx context.Context, config Config) Manager {
 type Manager interface {
 	NsqConfig() *nsq.Config
 	SetNSQConfig(nsqConfig *nsq.Config)
-	RegistryWorker(work Work) Work
-	Work(topic string) (Work, bool)
-	DestroyWork(work Work)
-	Works() []Work
-	PublishWork(work Work)
-	StartRegisterServer(channel string) Work
-	RegisterClient(channel string, message WorkMessage) Work
-	ConsumeWork(work Work, delay int)
+	RegistryWorker(work Worker) (Worker, bool)
+	Worker(topic string) (Worker, bool)
+	DestroyWorker(topic string) bool
+	Workers() []Worker
+	PublishWorker(work Worker)
+	StartRegisterServer(channel string) Worker
+	RegisterClient(channel string, message WorkMessage) Worker
+	ConsumeWorker(work Worker, delay int)
 	Start()
 	Stop()
 	Wait()

@@ -9,7 +9,7 @@ import (
 
 type WorkActionFunc = func(msg *nsq.Message) error
 
-type Work interface {
+type Worker interface {
 	Consumer(config *nsq.Config) (*nsq.Consumer, error)
 	Topic() string
 	Channel() string
@@ -51,7 +51,7 @@ func (w *work) Stop() {
 	}
 }
 
-func NewPublishWork(topic string, message WorkMessage) Work {
+func NewPublishWork(topic string, message WorkMessage) Worker {
 	return &work{
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),
@@ -59,7 +59,7 @@ func NewPublishWork(topic string, message WorkMessage) Work {
 	}
 }
 
-func NewConsumeWork(topic string, channel string) Work {
+func NewConsumeWork(topic string, channel string) Worker {
 	return &work{
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),

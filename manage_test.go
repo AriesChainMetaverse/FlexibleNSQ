@@ -35,7 +35,7 @@ func TestManage_StartRegisterServer(t *testing.T) {
 			}
 			fmt.Println("msg", message, "data", string(message.Data))
 			str := "hello world server"
-			manage.PublishWork(message.Work([]byte(str), 0))
+			manage.PublishWorker(message.Work([]byte(str), 0))
 		}
 	}()
 
@@ -59,7 +59,7 @@ func TestManage_StartRegisterClient(t *testing.T) {
 	}
 
 	go func() {
-		works := manage.Works()
+		works := manage.Workers()
 		//for {
 		for i := range works {
 			msg := <-works[i].Message()

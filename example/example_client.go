@@ -31,7 +31,7 @@ func Client() {
 	}
 
 	go func() {
-		works := manage.Works()
+		works := manage.Workers()
 		//for {
 		for i := range works {
 			msg := <-works[i].Message()

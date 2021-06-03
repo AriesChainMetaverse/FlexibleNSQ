@@ -30,7 +30,7 @@ func Server() {
 			}
 			fmt.Println("msg", message, "data", string(message.Data))
 			str := "hello world server"
-			manage.PublishWork(message.Work([]byte(str), 0))
+			manage.PublishWorker(message.Work([]byte(str), 0))
 		}
 	}()
 
