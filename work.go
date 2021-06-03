@@ -51,7 +51,7 @@ func (w *work) Stop() {
 	}
 }
 
-func NewPublishWork(topic string, message WorkMessage) Worker {
+func NewPublishWorker(topic string, message WorkMessage) Worker {
 	return &work{
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),
@@ -59,7 +59,7 @@ func NewPublishWork(topic string, message WorkMessage) Worker {
 	}
 }
 
-func NewConsumeWork(topic string, channel string) Worker {
+func NewConsumeWorker(topic string, channel string) Worker {
 	return &work{
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),

@@ -99,7 +99,7 @@ func (m *manage) StartRegisterServer(channel string) Worker {
 	if b {
 		return work
 	}
-	work = NewConsumeWork(m.config.RegisterName, channel)
+	work = NewConsumeWorker(m.config.RegisterName, channel)
 	m.ConsumeWorker(work, 0)
 	return work
 }
@@ -141,9 +141,9 @@ func (m *manage) Wait() {
 }
 
 func (m *manage) RegisterClient(channel string, message WorkMessage) Worker {
-	m.PublishWorker(NewPublishWork(m.config.RegisterName, message))
+	m.PublishWorker(NewPublishWorker(m.config.RegisterName, message))
 
-	work := NewConsumeWork(message.Topic, channel)
+	work := NewConsumeWorker(message.Topic, channel)
 	m.ConsumeWorker(work, 5)
 	return work
 }
