@@ -33,8 +33,12 @@ func TestManage_StartRegisterServer(t *testing.T) {
 			if err != nil {
 				return
 			}
+			if message.ID == "" {
+				continue
+			}
 			fmt.Println("msg", message, "data", string(message.Data))
 			str := "hello world server"
+
 			manage.PublishWorker(message.Work([]byte(str), 0))
 		}
 	}()
@@ -52,6 +56,7 @@ func TestManage_StartRegisterClient(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		manage.RegisterClient("client1", fnsq.WorkMessage{
+			ID:     "client1",
 			Topic:  "rnd" + strconv.Itoa(i),
 			Length: len(str),
 			Data:   []byte(str),

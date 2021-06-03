@@ -89,7 +89,6 @@ func (m *manage) consumeWorker(work Worker) error {
 				continue
 			}
 		}
-
 	}
 }
 
