@@ -23,7 +23,7 @@ func (m *manage) NsqConfig() *nsq.Config {
 	return m.nsqConfig
 }
 
-func (m *manage) SetNsqConfig(nsqConfig *nsq.Config) {
+func (m *manage) SetNSQConfig(nsqConfig *nsq.Config) {
 	m.nsqConfig = nsqConfig
 }
 
@@ -181,7 +181,7 @@ func NewManager(ctx context.Context, config Config) Manager {
 
 type Manager interface {
 	NsqConfig() *nsq.Config
-	SetNsqConfig(nsqConfig *nsq.Config)
+	SetNSQConfig(nsqConfig *nsq.Config)
 	RegistryWorker(work Work) Work
 	Work(topic string) (Work, bool)
 	DestroyWork(work Work)
