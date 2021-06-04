@@ -15,16 +15,22 @@ type Worker interface {
 	Channel() string
 	HandleMessage(msg *nsq.Message) error
 	Message() <-chan *nsq.Message
+	Closed() <-chan bool
 	Data() []byte
 	Stop()
 }
 
 type work struct {
 	consumer *nsq.Consumer
+	closed   chan bool
 	message  chan *nsq.Message
 	topic    string
 	channel  string
 	data     []byte
+}
+
+func (w *work) Closed() <-chan bool {
+	return w.closed
 }
 
 func (w *work) Message() <-chan *nsq.Message {
@@ -49,10 +55,12 @@ func (w *work) Stop() {
 		w.consumer.Stop()
 		w.consumer = nil
 	}
+	w.closed <- true
 }
 
 func NewPublishWorker(topic string, message WorkMessage) Worker {
 	return &work{
+		closed:  make(chan bool, 1),
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),
 		data:    message.JSON(),
@@ -61,6 +69,7 @@ func NewPublishWorker(topic string, message WorkMessage) Worker {
 
 func NewConsumeWorker(topic string, channel string) Worker {
 	return &work{
+		closed:  make(chan bool, 1),
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),
 		channel: channel,
