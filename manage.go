@@ -2,7 +2,6 @@ package fnsq
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -158,18 +157,15 @@ func (m *manage) produceWorker() error {
 	for {
 		errPing := producer.Ping()
 		if errPing != nil {
-			fmt.Printf("faile ping:%+v\n", errPing)
-			break
+			return err
 		}
 		select {
 		case <-m.ctx.Done():
 			return m.ctx.Err()
 		case work = <-m.workChan.Out:
-			fmt.Printf("send work:%+v\n", work)
 			err = producer.Publish(work.Topic(), work.Data())
-			if err != nil {
-				fmt.Println("err", err)
-				continue
+			if err != nil && !m.config.IgnoreReceiveErr {
+				return err
 			}
 		}
 	}
