@@ -83,9 +83,13 @@ func (m *manage) consumeWorker(work Worker) error {
 		select {
 		case <-m.ctx.Done():
 		default:
-			err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
-			if err != nil {
-				continue
+			if m.config.UseSecurity {
+				err = consumer.ConnectToNSQD(m.config.ConsumeAddr)
+			} else {
+				err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
+				if err != nil {
+					continue
+				}
 			}
 		}
 	}
