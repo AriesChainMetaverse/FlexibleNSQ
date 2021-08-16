@@ -79,18 +79,21 @@ func (m *manage) consumeWorker(work Worker) error {
 	if err != nil {
 		return err
 	}
+	t := time.NewTimer(m.config.Interval * time.Second)
+	defer t.Stop()
 	for {
 		select {
 		case <-m.ctx.Done():
-		default:
+		case <-t.C:
 			if m.config.UseSecurity {
 				err = consumer.ConnectToNSQD(m.config.ConsumeAddr)
 			} else {
 				err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
 				if err != nil {
-					continue
+
 				}
 			}
+			t.Reset(m.config.Interval * time.Second)
 		}
 	}
 }
