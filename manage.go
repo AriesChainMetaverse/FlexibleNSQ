@@ -142,7 +142,7 @@ func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) 
 func (m *manage) RegisterClient(topic, channel string, message []byte) Worker {
 	m.PublishWorker(NewPublishWorker(m.config.RegisterName, message))
 	m.PublishWorker(NewPublishWorker(topic, []byte(HelloWorld)))
-	return m.RegisterConsumeWorker(topic, channel, 5)
+	return m.RegisterConsumeWorker(topic, channel, 0)
 }
 
 func (m *manage) ConsumeWorker(work Worker, delay int) {
