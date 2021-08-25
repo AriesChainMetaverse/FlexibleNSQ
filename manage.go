@@ -2,11 +2,28 @@ package fnsq
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/nsqio/go-nsq"
 )
+
+type Manager interface {
+	RegisterName() string
+	NSQConfig() *nsq.Config
+	SetNSQConfig(nsqConfig *nsq.Config)
+	Worker(topic string) (Worker, bool)
+	DestroyWorker(topic string) bool
+	Workers() []Worker
+	PublishWorker(work Worker)
+	RegisterServer(channel string) Worker
+	RegisterClient(topic, channel string, message []byte) Worker
+	ConsumeWorker(work Worker, delay int)
+	Start()
+	Stop()
+	Wait()
+}
 
 type manage struct {
 	ctx        context.Context
@@ -86,8 +103,14 @@ func (m *manage) consumeWorker(work Worker) error {
 		case <-m.ctx.Done():
 		case <-t.C:
 			if m.config.UseSecurity {
+				if DEBUG {
+					//fmt.Println("ConnectToNSQD")
+				}
 				err = consumer.ConnectToNSQD(m.config.ConsumeAddr)
 			} else {
+				if DEBUG {
+					//fmt.Println("ConnectToNSQLookupd")
+				}
 				err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
 				if err != nil {
 
@@ -103,8 +126,8 @@ func (m *manage) PublishWorker(work Worker) {
 }
 
 func (m *manage) RegisterServer(channel string) Worker {
-	m.PublishWorker(NewPublishWorker(m.config.RegisterName, WorkMessage{}))
-	return m.RegisterConsumeWorker(m.config.RegisterName, channel, 3)
+	m.PublishWorker(NewPublishWorker(m.config.RegisterName, []byte(HelloWorld)))
+	return m.RegisterConsumeWorker(m.config.RegisterName, channel, 0)
 }
 
 func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) Worker {
@@ -116,9 +139,10 @@ func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) 
 	return work
 }
 
-func (m *manage) RegisterClient(channel string, message WorkMessage) Worker {
+func (m *manage) RegisterClient(topic, channel string, message []byte) Worker {
 	m.PublishWorker(NewPublishWorker(m.config.RegisterName, message))
-	return m.RegisterConsumeWorker(message.Topic, channel, 3)
+	m.PublishWorker(NewPublishWorker(topic, []byte(HelloWorld)))
+	return m.RegisterConsumeWorker(topic, channel, 5)
 }
 
 func (m *manage) ConsumeWorker(work Worker, delay int) {
@@ -170,10 +194,17 @@ func (m *manage) produceWorker() error {
 		case <-m.ctx.Done():
 			return m.ctx.Err()
 		case work = <-m.workChan.Out:
-			err = producer.Publish(work.Topic(), work.Data())
-			if err != nil && !m.config.IgnoreReceiveErr {
-				return err
+			if DEBUG {
+				fmt.Println("work data:", "topic", work.Topic(), "data", work.Data())
 			}
+			err = producer.Publish(work.Topic(), work.Data())
+			if err != nil {
+				fmt.Println("ERR:", err)
+				if !m.config.IgnoreReceiveErr {
+					return err
+				}
+			}
+
 		}
 	}
 	return nil
@@ -193,20 +224,4 @@ func initManage(ctx context.Context, config Config) Manager {
 
 func NewManager(ctx context.Context, config Config) Manager {
 	return initManage(ctx, config)
-}
-
-type Manager interface {
-	RegisterName() string
-	NSQConfig() *nsq.Config
-	SetNSQConfig(nsqConfig *nsq.Config)
-	Worker(topic string) (Worker, bool)
-	DestroyWorker(topic string) bool
-	Workers() []Worker
-	PublishWorker(work Worker)
-	RegisterServer(channel string) Worker
-	RegisterClient(channel string, message WorkMessage) Worker
-	ConsumeWorker(work Worker, delay int)
-	Start()
-	Stop()
-	Wait()
 }

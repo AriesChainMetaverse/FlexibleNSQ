@@ -2,6 +2,7 @@ package fnsq
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/nsqio/go-nsq"
@@ -58,12 +59,12 @@ func (w *work) Stop() {
 	w.closed <- true
 }
 
-func NewPublishWorker(topic string, message WorkMessage) Worker {
+func NewPublishWorker(topic string, message []byte) Worker {
 	return &work{
 		closed:  make(chan bool, 1),
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),
-		data:    message.JSON(),
+		data:    message,
 	}
 }
 
@@ -101,6 +102,12 @@ func (w *work) SetChannel(channel string) {
 }
 
 func (w work) HandleMessage(msg *nsq.Message) error {
+	if string(msg.Body) == HelloWorld {
+		if DEBUG {
+			fmt.Println("received hello world")
+		}
+		return nil
+	}
 	t := time.NewTimer(5 * time.Second)
 	defer t.Stop()
 	select {

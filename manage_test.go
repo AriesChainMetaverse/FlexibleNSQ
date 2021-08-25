@@ -14,12 +14,16 @@ var manage fnsq.Manager
 
 func init() {
 	config := fnsq.DefaultConfig()
-	config.ConsumeAddr = "192.168.2.201:4161"
-	config.ProducerAddr = "192.168.2.201:4150"
+	config.ConsumeAddr = "127.0.0.1:4161"
+	config.ProducerAddr = "127.0.0.1:4150"
+	config.Interval = 3
 	manage = fnsq.NewManager(context.TODO(), config)
+
+	fnsq.DEBUG = true
 }
 
 func TestManage_StartRegisterServer(t *testing.T) {
+	fmt.Printf("nsqconfig:%+v\n", manage.NSQConfig())
 	manage.Start()
 	go func() {
 		time.Sleep(100 * time.Second)
@@ -29,17 +33,19 @@ func TestManage_StartRegisterServer(t *testing.T) {
 	go func() {
 		for {
 			msg := <-work.Message()
-			message, err := fnsq.ParseMessage(msg.Body)
-			if err != nil {
-				return
-			}
-			if message.ID == "" {
+			if string(msg.Body) == fnsq.HelloWorld {
+				fmt.Println("new hello world")
 				continue
 			}
-			fmt.Println("msg", message, "data", string(message.Data))
+			message := fnsq.ParseMessage(msg.Body)
+			fmt.Println("received server message:", message)
+			if message.ID() == "" {
+				continue
+			}
+			fmt.Println("msg", message, "data", string(message.Data()))
 			str := "hello world server"
 
-			manage.PublishWorker(message.Work([]byte(str), 0))
+			manage.PublishWorker(message.NewWork([]byte(str), 0))
 		}
 	}()
 
@@ -55,12 +61,12 @@ func TestManage_StartRegisterClient(t *testing.T) {
 	}()
 
 	for i := 0; i < 100; i++ {
-		manage.RegisterClient("client1", fnsq.WorkMessage{
-			ID:     "client1",
-			Topic:  "rnd" + strconv.Itoa(i),
-			Length: len(str),
-			Data:   []byte(str),
-		})
+		manage.RegisterClient("rnd"+strconv.Itoa(i), "client1", fnsq.NewMessageData(
+			"client1",
+			"rnd"+strconv.Itoa(i),
+			time.Now().UnixNano(),
+			[]byte(str),
+		))
 	}
 
 	go func() {
@@ -68,11 +74,9 @@ func TestManage_StartRegisterClient(t *testing.T) {
 		//for {
 		for i := range works {
 			msg := <-works[i].Message()
-			message, err := fnsq.ParseMessage(msg.Body)
-			if err != nil {
-				return
-			}
-			fmt.Println(message.Topic, message, "data", string(message.Data))
+			message := fnsq.ParseMessage(msg.Body)
+
+			fmt.Println("receive new message:", message.Topic(), "data", string(message.Data()))
 		}
 		//}
 	}()

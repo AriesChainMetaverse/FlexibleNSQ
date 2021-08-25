@@ -1,47 +1,77 @@
 package fnsq
 
 import (
-	"encoding/json"
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/DragonveinChain/FlexibleNSQ/message"
 )
+
+const HelloWorld = "#hello#world#"
 
 type ActionCallback = func(data []byte)
 
-type WorkMessage struct {
-	ID     string `json:"id,omitempty"`
-	Topic  string `json:"topic,omitempty"`
-	Last   int64  `json:"last,omitempty"`
-	Length int    `json:"length,omitempty"`
-	Data   []byte `json:"data,omitempty"`
+type WorkMessage message.Message
+
+//type WorkMessage struct {
+//	ID     string `json:"id,omitempty"`
+//	Topic  string `json:"topic,omitempty"`
+//	Last   int64  `json:"last,omitempty"`
+//	Length int    `json:"length,omitempty"`
+//	Data   []byte `json:"data,omitempty"`
+//}
+//
+//func (m WorkMessage) JSON() []byte {
+//	msg, err := json.Marshal(m)
+//	if err != nil {
+//		return nil
+//	}
+//	return msg
+//}
+//
+//func (m WorkMessage) String() string {
+//	return string(m.JSON())
+//}
+
+func NewMessageData(id string, topic string, last int64, data []byte) []byte {
+	builder := flatbuffers.NewBuilder(1024)
+	_id := builder.CreateString(id)
+	_topic := builder.CreateString(topic)
+	_data := builder.CreateByteString(data)
+
+	message.MessageStart(builder)
+	message.MessageAddId(builder, _id)
+	message.MessageAddTopic(builder, _topic)
+	message.MessageAddLast(builder, last)
+	message.MessageAddData(builder, _data)
+	builder.Finish(message.MessageEnd(builder))
+
+	return builder.FinishedBytes()
 }
 
-func (m WorkMessage) JSON() []byte {
-	msg, err := json.Marshal(m)
-	if err != nil {
-		return nil
-	}
-	return msg
+func ParseMessage(data []byte) *WorkMessage {
+	return (*WorkMessage)(message.GetRootAsMessage(data, 0))
 }
 
-func (m WorkMessage) String() string {
-	return string(m.JSON())
+func (m *WorkMessage) msg() *message.Message {
+	return (*message.Message)(m)
 }
 
-func NewWorkMessage(id string, topic string, last int64, data []byte) WorkMessage {
-	return WorkMessage{
-		ID:     id,
-		Topic:  topic,
-		Last:   last,
-		Length: len(data),
-		Data:   data,
-	}
+func (m *WorkMessage) Topic() string {
+	return string(m.msg().Topic())
 }
 
-func ParseMessage(data []byte) (WorkMessage, error) {
-	var in WorkMessage
-	err := json.Unmarshal(data, &in)
-	return in, err
+func (m *WorkMessage) ID() string {
+	return string(m.msg().Id())
 }
 
-func (m WorkMessage) Work(data []byte, last int64) Worker {
-	return NewPublishWorker(m.Topic, NewWorkMessage(m.ID, m.Topic, last, data))
+func (m *WorkMessage) Last() int64 {
+	return m.msg().Last()
+}
+
+func (m *WorkMessage) Data() []byte {
+	return m.msg().Data()
+}
+
+func (m *WorkMessage) NewWork(data []byte, last int64) Worker {
+	return NewPublishWorker(m.Topic(), NewMessageData(m.ID(), m.Topic(), last, data))
 }
