@@ -21,7 +21,6 @@ type Worker interface {
 	Channel() string
 	Message() <-chan *nsq.Message
 	Closed() bool
-	Data() []byte
 	Stop()
 }
 
@@ -32,7 +31,6 @@ type work struct {
 	message  chan *nsq.Message
 	topic    string
 	channel  string
-	data     []byte
 }
 
 func (w *work) Closed() bool {
@@ -90,14 +88,6 @@ func (w *work) NewPublisher(message []byte) Publisher {
 		topic:   w.topic,
 		message: message,
 	}
-}
-
-func (w *work) SetData(data []byte) {
-	w.data = data
-}
-
-func (w *work) Data() []byte {
-	return w.data
 }
 
 func (w *work) Topic() string {

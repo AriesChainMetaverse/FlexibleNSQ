@@ -133,10 +133,8 @@ func (m *manage) Publisher(pub Publisher) {
 }
 
 func (m *manage) registerConsumeWorker(topic string, channel string, delay int) Worker {
-	_work, b := m.registryWorker(NewWorker(topic, channel))
-	if b {
-		return _work
-	}
+	_work := NewWorker(topic, channel)
+	m.addWorker(_work)
 	m.consumeWorker(_work, delay)
 	return _work
 }
@@ -146,6 +144,10 @@ func (m *manage) PublishRegisterMessage(message []byte) {
 }
 
 func (m *manage) RegisterWorker(topic, channel string) Worker {
+	_work, b := m.Worker(topic)
+	if b {
+		return _work
+	}
 	return m.register(topic, channel)
 }
 
