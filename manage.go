@@ -16,13 +16,18 @@ type Manager interface {
 	Worker(topic string) (Worker, bool)
 	DestroyWorker(topic string) bool
 	Workers() []Worker
-	PublishWorker(work Worker)
-	RegisterServer(channel string) Worker
-	RegisterClient(topic, channel string, message []byte) Worker
+	//PublishWorker(work Worker)
+	//RegisterServer(channel string) Worker
+	//RegisterClient(topic, channel string, message []byte) Worker
 	ConsumeWorker(work Worker, delay int)
-	Start()
+	Start(topic, channel string)
 	Stop()
 	Wait()
+}
+
+type Server interface {
+	Start(serverName string) Worker
+	PublicMessage(topic string, message []byte)
 }
 
 type manage struct {
@@ -32,7 +37,7 @@ type manage struct {
 	nsqConfig  *nsq.Config
 	workerLock sync.RWMutex
 	workers    map[string]Worker
-	workChan   *WorkerChan
+	msgChan    *MessageChan
 }
 
 func (m *manage) NSQConfig() *nsq.Config {
@@ -121,17 +126,15 @@ func (m *manage) consumeWorker(work Worker) error {
 	}
 }
 
-func (m *manage) PublishWorker(work Worker) {
-	m.workChan.In <- work
-}
-
-func (m *manage) RegisterServer(channel string) Worker {
-	m.PublishWorker(NewPublishWorker(m.config.RegisterName, []byte(HelloWorld)))
-	return m.RegisterConsumeWorker(m.config.RegisterName, channel, 0)
+func (m *manage) Publish(topic string, message []byte) {
+	m.msgChan.In <- &publisher{
+		topic:   topic,
+		message: message,
+	}
 }
 
 func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) Worker {
-	work, b := m.registryWorker(NewConsumeWorker(topic, channel))
+	work, b := m.registryWorker(NewWorker(topic, channel))
 	if b {
 		return work
 	}
@@ -139,9 +142,12 @@ func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) 
 	return work
 }
 
-func (m *manage) RegisterClient(topic, channel string, message []byte) Worker {
-	m.PublishWorker(NewPublishWorker(m.config.RegisterName, message))
-	m.PublishWorker(NewPublishWorker(topic, []byte(HelloWorld)))
+func (m *manage) PublishRegisterMessage(message []byte) {
+	m.Publish(m.config.RegisterName, message)
+}
+
+func (m *manage) register(topic, channel string) Worker {
+	m.Publish(topic, []byte(HelloWorld))
 	return m.RegisterConsumeWorker(topic, channel, 0)
 }
 
@@ -160,8 +166,13 @@ func (m *manage) ConsumeWorker(work Worker, delay int) {
 	}(delay)
 }
 
-func (m *manage) Start() {
-	go m.produceWorker()
+func (m *manage) Start(topic, channel string) {
+	m.register(topic, channel)
+	m.start()
+}
+
+func (m *manage) start() {
+	go m.publishProducer()
 }
 
 func (m *manage) Stop() {
@@ -178,13 +189,13 @@ func (m *manage) Wait() {
 	<-m.ctx.Done()
 }
 
-func (m *manage) produceWorker() error {
+func (m *manage) publishProducer() error {
 	producer, err := nsq.NewProducer(m.config.ProducerAddr, m.nsqConfig)
 	if err != nil {
 		return err
 	}
 	defer producer.Stop()
-	var work Worker
+	var _message Publisher
 	for {
 		errPing := producer.Ping()
 		if errPing != nil {
@@ -193,11 +204,11 @@ func (m *manage) produceWorker() error {
 		select {
 		case <-m.ctx.Done():
 			return m.ctx.Err()
-		case work = <-m.workChan.Out:
+		case _message = <-m.msgChan.Out:
 			if DEBUG {
-				fmt.Println("work data:", "topic", work.Topic(), "data", work.Data())
+				fmt.Println("_message data:", "topic", _message.Topic(), "message", _message.Message())
 			}
-			err = producer.Publish(work.Topic(), work.Data())
+			err = producer.Publish(_message.Topic(), _message.Message())
 			if err != nil {
 				fmt.Println("ERR:", err)
 				if !m.config.IgnoreReceiveErr {
@@ -210,6 +221,10 @@ func (m *manage) produceWorker() error {
 	return nil
 }
 
+func (m *manage) Server() Server {
+	return (*manageServer)(m)
+}
+
 func initManage(ctx context.Context, config Config) Manager {
 	ctx, cancel := context.WithCancel(ctx)
 	return &manage{
@@ -218,7 +233,7 @@ func initManage(ctx context.Context, config Config) Manager {
 		config:    config,
 		nsqConfig: nsq.NewConfig(),
 		workers:   make(map[string]Worker, 1),
-		workChan:  NewWorkChan(5),
+		msgChan:   NewWorkChan(5),
 	}
 }
 

@@ -3,6 +3,7 @@ package fnsq
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/nsqio/go-nsq"
@@ -14,15 +15,15 @@ type Worker interface {
 	Consumer(config *nsq.Config) (*nsq.Consumer, error)
 	Topic() string
 	Channel() string
-	HandleMessage(msg *nsq.Message) error
 	Message() <-chan *nsq.Message
-	Closed() <-chan bool
+	Closed() bool
 	Data() []byte
 	Stop()
 }
 
 type work struct {
 	consumer *nsq.Consumer
+	once     sync.Once
 	closed   chan bool
 	message  chan *nsq.Message
 	topic    string
@@ -30,8 +31,16 @@ type work struct {
 	data     []byte
 }
 
-func (w *work) Closed() <-chan bool {
-	return w.closed
+func (w *work) Closed() bool {
+	select {
+	case v, b := <-w.closed:
+		if b {
+			return v
+		}
+		return true
+	default:
+	}
+	return false
 }
 
 func (w *work) Message() <-chan *nsq.Message {
@@ -52,23 +61,18 @@ func (w *work) Consumer(config *nsq.Config) (*nsq.Consumer, error) {
 }
 
 func (w *work) Stop() {
-	if w.consumer != nil {
-		w.consumer.Stop()
-		w.consumer = nil
-	}
-	w.closed <- true
+	w.once.Do(func() {
+		if w.consumer != nil {
+			w.consumer.Stop()
+			w.consumer = nil
+		}
+		w.closed <- true
+		close(w.closed)
+	})
+
 }
 
-func NewPublishWorker(topic string, message []byte) Worker {
-	return &work{
-		closed:  make(chan bool, 1),
-		topic:   topic,
-		message: make(chan *nsq.Message, 1024),
-		data:    message,
-	}
-}
-
-func NewConsumeWorker(topic string, channel string) Worker {
+func NewWorker(topic string, channel string) Worker {
 	return &work{
 		closed:  make(chan bool, 1),
 		topic:   topic,
@@ -81,27 +85,19 @@ func (w *work) SetData(data []byte) {
 	w.data = data
 }
 
-func (w work) Data() []byte {
+func (w *work) Data() []byte {
 	return w.data
 }
 
-func (w work) Topic() string {
+func (w *work) Topic() string {
 	return w.topic
 }
 
-func (w work) Channel() string {
+func (w *work) Channel() string {
 	return w.channel
 }
 
-func (w *work) SetTopic(topic string) {
-	w.topic = topic
-}
-
-func (w *work) SetChannel(channel string) {
-	w.channel = channel
-}
-
-func (w work) HandleMessage(msg *nsq.Message) error {
+func (w *work) HandleMessage(msg *nsq.Message) error {
 	if string(msg.Body) == HelloWorld {
 		if DEBUG {
 			fmt.Println("received hello world")
