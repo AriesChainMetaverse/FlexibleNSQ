@@ -23,11 +23,15 @@ func Client() {
 	}()
 
 	for i := 0; i < 100; i++ {
-		manage.RegisterClient("client1", fnsq.WorkMessage{
-			Topic:  "rnd" + strconv.Itoa(i),
-			Length: len(str),
-			Data:   []byte(str),
-		})
+
+		work := manage.RegisterWorker("client1", "rnd"+strconv.Itoa(i))
+		manage.Publisher(work.NewPublisher(
+			fnsq.NewMessageData(
+				"rnd"+strconv.Itoa(i),
+				"rnd"+strconv.Itoa(i),
+				time.Now().UnixNano(),
+				[]byte(str),
+			)))
 	}
 
 	go func() {
@@ -35,11 +39,9 @@ func Client() {
 		//for {
 		for i := range works {
 			msg := <-works[i].Message()
-			message, err := fnsq.ParseMessage(msg.Body)
-			if err != nil {
-				return
-			}
-			fmt.Println(message.Topic, message, "data", string(message.Data))
+			message := fnsq.ParseMessage(msg.Body)
+
+			fmt.Println(message.Topic, message, "data", string(message.Data()))
 		}
 		//}
 	}()
