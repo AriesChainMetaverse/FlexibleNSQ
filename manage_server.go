@@ -2,19 +2,33 @@ package fnsq
 
 type manageServer manage
 
+type Server interface {
+	Start(serverName string) Worker
+	Stop()
+	Wait()
+	Publisher(pub Publisher)
+}
+
+func (m *manageServer) Publisher(pub Publisher) {
+	m.manage().Publisher(pub)
+}
+
 func (m *manageServer) Start(serverName string) Worker {
 	w := m.manage().register(m.config.RegisterName, serverName)
 	m.manage().start()
 	return w
 }
 
-//func (m *manageServer) registerServer(channel string) Worker {
-//	m.manage().PublishWorker(NewPublishWorker(m.config.RegisterName, []byte(HelloWorld)))
-//	return m.manage().RegisterConsumeWorker(m.config.RegisterName, channel, 0)
-//}
+func (m *manageServer) Stop() {
+	m.manage().Stop()
+}
+
+func (m *manageServer) Wait() {
+	m.manage().Wait()
+}
 
 func (m *manageServer) PublicMessage(topic string, message []byte) {
-	m.manage().Publish(topic, message)
+	m.manage().PublishMessage(topic, message)
 }
 
 func (m *manageServer) manage() *manage {

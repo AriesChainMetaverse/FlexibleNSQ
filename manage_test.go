@@ -24,12 +24,12 @@ func init() {
 
 func TestManage_StartRegisterServer(t *testing.T) {
 	fmt.Printf("nsqconfig:%+v\n", manage.NSQConfig())
-	manage.Start()
+	work := manage.Server().Start("server1")
 	go func() {
 		time.Sleep(100 * time.Second)
 		manage.Stop()
 	}()
-	work := manage.RegisterServer("server1")
+	//work := manage.RegisterServer("server1")
 	go func() {
 		for {
 			msg := <-work.Message()
@@ -45,7 +45,7 @@ func TestManage_StartRegisterServer(t *testing.T) {
 			fmt.Println("msg", message, "data", string(message.Data()))
 			str := "hello world server"
 
-			manage.PublishWorker(message.NewWork([]byte(str), 0))
+			manage.Publisher(message.NewPublisher([]byte(str), 0))
 		}
 	}()
 
@@ -61,12 +61,13 @@ func TestManage_StartRegisterClient(t *testing.T) {
 	}()
 
 	for i := 0; i < 100; i++ {
-		manage.RegisterClient("rnd"+strconv.Itoa(i), "client1", fnsq.NewMessageData(
+		worker := manage.RegisterWorker("rnd"+strconv.Itoa(i), "client1")
+		manage.Publisher(worker.NewPublisher(fnsq.NewMessageData(
 			"client1",
 			"rnd"+strconv.Itoa(i),
 			time.Now().UnixNano(),
 			[]byte(str),
-		))
+		)))
 	}
 
 	go func() {

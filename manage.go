@@ -16,18 +16,13 @@ type Manager interface {
 	Worker(topic string) (Worker, bool)
 	DestroyWorker(topic string) bool
 	Workers() []Worker
-	//PublishWorker(work Worker)
-	//RegisterServer(channel string) Worker
-	//RegisterClient(topic, channel string, message []byte) Worker
-	ConsumeWorker(work Worker, delay int)
-	Start(topic, channel string)
+	Server() Server
+	PublishMessage(topic string, message []byte)
+	Publisher(pub Publisher)
+	RegisterWorker(topic, channel string) Worker
+	Start()
 	Stop()
 	Wait()
-}
-
-type Server interface {
-	Start(serverName string) Worker
-	PublicMessage(topic string, message []byte)
 }
 
 type manage struct {
@@ -96,7 +91,7 @@ func (m *manage) Workers() []Worker {
 	return works
 }
 
-func (m *manage) consumeWorker(work Worker) error {
+func (m *manage) consumeProcessor(work Worker) error {
 	consumer, err := work.Consumer(m.nsqConfig)
 	if err != nil {
 		return err
@@ -126,48 +121,56 @@ func (m *manage) consumeWorker(work Worker) error {
 	}
 }
 
-func (m *manage) Publish(topic string, message []byte) {
+func (m *manage) PublishMessage(topic string, message []byte) {
 	m.msgChan.In <- &publisher{
 		topic:   topic,
 		message: message,
 	}
 }
 
-func (m *manage) RegisterConsumeWorker(topic string, channel string, delay int) Worker {
-	work, b := m.registryWorker(NewWorker(topic, channel))
+func (m *manage) Publisher(pub Publisher) {
+	m.msgChan.In <- pub
+}
+
+func (m *manage) registerConsumeWorker(topic string, channel string, delay int) Worker {
+	_work, b := m.registryWorker(NewWorker(topic, channel))
 	if b {
-		return work
+		return _work
 	}
-	m.ConsumeWorker(work, delay)
-	return work
+	m.consumeWorker(_work, delay)
+	return _work
 }
 
 func (m *manage) PublishRegisterMessage(message []byte) {
-	m.Publish(m.config.RegisterName, message)
+	m.PublishMessage(m.config.RegisterName, message)
+}
+
+func (m *manage) RegisterWorker(topic, channel string) Worker {
+	return m.register(topic, channel)
 }
 
 func (m *manage) register(topic, channel string) Worker {
-	m.Publish(topic, []byte(HelloWorld))
-	return m.RegisterConsumeWorker(topic, channel, 0)
+	m.PublishMessage(topic, []byte(HelloWorld))
+	return m.registerConsumeWorker(topic, channel, 0)
 }
 
-func (m *manage) ConsumeWorker(work Worker, delay int) {
+func (m *manage) consumeWorker(work Worker, delay int) {
 	go func(delay int) {
 		if delay != 0 {
 			t := time.NewTimer(time.Duration(delay) * time.Second)
 			defer t.Stop()
 			select {
 			case <-t.C:
-				m.consumeWorker(work)
+				m.consumeProcessor(work)
 			}
 		} else {
-			m.consumeWorker(work)
+			m.consumeProcessor(work)
 		}
 	}(delay)
 }
 
-func (m *manage) Start(topic, channel string) {
-	m.register(topic, channel)
+func (m *manage) Start() {
+	//m.register(topic, channel)
 	m.start()
 }
 
@@ -181,7 +184,7 @@ func (m *manage) Stop() {
 		m.cancel = nil
 	}
 	for _, w := range m.Workers() {
-		w.Stop()
+		m.DestroyWorker(w.Topic())
 	}
 }
 

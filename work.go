@@ -9,10 +9,14 @@ import (
 	"github.com/nsqio/go-nsq"
 )
 
+var ErrWorkClosed = errors.New("work is closed")
+var ErrInputMessageTimeout = errors.New("handle input message timeout")
+
 type WorkActionFunc = func(msg *nsq.Message) error
 
 type Worker interface {
 	Consumer(config *nsq.Config) (*nsq.Consumer, error)
+	NewPublisher(message []byte) Publisher
 	Topic() string
 	Channel() string
 	Message() <-chan *nsq.Message
@@ -81,6 +85,13 @@ func NewWorker(topic string, channel string) Worker {
 	}
 }
 
+func (w *work) NewPublisher(message []byte) Publisher {
+	return &publisher{
+		topic:   w.topic,
+		message: message,
+	}
+}
+
 func (w *work) SetData(data []byte) {
 	w.data = data
 }
@@ -98,9 +109,12 @@ func (w *work) Channel() string {
 }
 
 func (w *work) HandleMessage(msg *nsq.Message) error {
+	if w.Closed() {
+		return ErrWorkClosed
+	}
 	if string(msg.Body) == HelloWorld {
 		if DEBUG {
-			fmt.Println("received hello world")
+			fmt.Println("received system message:", HelloWorld)
 		}
 		return nil
 	}
@@ -109,7 +123,7 @@ func (w *work) HandleMessage(msg *nsq.Message) error {
 	select {
 	case w.message <- msg:
 	case <-t.C:
-		return errors.New("input time out")
+		return ErrInputMessageTimeout
 	}
 	return nil
 }
