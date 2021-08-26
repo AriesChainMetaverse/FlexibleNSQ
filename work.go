@@ -15,7 +15,7 @@ var ErrInputMessageTimeout = errors.New("handle input message timeout")
 type WorkActionFunc = func(msg *nsq.Message) error
 
 type Worker interface {
-	Consumer(config *nsq.Config) (*nsq.Consumer, error)
+	Consumer(config *nsq.Config, addr string, interval time.Duration, security bool) error
 	NewPublisher(message []byte) Publisher
 	Topic() string
 	Channel() string
@@ -49,17 +49,53 @@ func (w *work) Message() <-chan *nsq.Message {
 	return w.message
 }
 
-func (w *work) Consumer(config *nsq.Config) (*nsq.Consumer, error) {
-	if w.consumer != nil {
-		return w.consumer, nil
-	}
-	var err error
-	w.consumer, err = nsq.NewConsumer(w.Topic(), w.Channel(), config)
+func (w *work) Consumer(config *nsq.Config, addr string, interval time.Duration, security bool) error {
+	return w.connect(config, addr, interval, security)
+}
+
+func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, security bool) error {
+	consumer, err := nsq.NewConsumer(w.Topic(), w.Channel(), config)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	w.consumer.AddHandler(w)
-	return w.consumer, nil
+	consumer.AddHandler(w)
+	t := time.NewTimer(interval * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case _, _ = <-w.closed:
+			if security {
+				if DEBUG {
+					//fmt.Println("ConnectToNSQD")
+				}
+				err = consumer.DisconnectFromNSQD(addr)
+			} else {
+				if DEBUG {
+					//fmt.Println("ConnectToNSQLookupd")
+				}
+				err = consumer.DisconnectFromNSQLookupd(addr)
+				if err != nil {
+
+				}
+			}
+		case <-t.C:
+			if security {
+				if DEBUG {
+					//fmt.Println("ConnectToNSQD")
+				}
+				err = consumer.ConnectToNSQD(addr)
+			} else {
+				if DEBUG {
+					//fmt.Println("ConnectToNSQLookupd")
+				}
+				err = consumer.ConnectToNSQLookupd(addr)
+				if err != nil {
+
+				}
+			}
+			t.Reset(interval * time.Second)
+		}
+	}
 }
 
 func (w *work) Stop() {

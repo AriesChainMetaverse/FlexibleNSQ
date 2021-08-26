@@ -91,36 +91,6 @@ func (m *manage) Workers() []Worker {
 	return works
 }
 
-func (m *manage) consumeProcessor(work Worker) error {
-	consumer, err := work.Consumer(m.nsqConfig)
-	if err != nil {
-		return err
-	}
-	t := time.NewTimer(m.config.Interval * time.Second)
-	defer t.Stop()
-	for {
-		select {
-		case <-m.ctx.Done():
-		case <-t.C:
-			if m.config.UseSecurity {
-				if DEBUG {
-					//fmt.Println("ConnectToNSQD")
-				}
-				err = consumer.ConnectToNSQD(m.config.ConsumeAddr)
-			} else {
-				if DEBUG {
-					//fmt.Println("ConnectToNSQLookupd")
-				}
-				err = consumer.ConnectToNSQLookupd(m.config.ConsumeAddr)
-				if err != nil {
-
-				}
-			}
-			t.Reset(m.config.Interval * time.Second)
-		}
-	}
-}
-
 func (m *manage) PublishMessage(topic string, message []byte) {
 	m.msgChan.In <- &publisher{
 		topic:   topic,
@@ -158,15 +128,24 @@ func (m *manage) register(topic, channel string) Worker {
 
 func (m *manage) consumeWorker(work Worker, delay int) {
 	go func(delay int) {
+		var err error
 		if delay != 0 {
 			t := time.NewTimer(time.Duration(delay) * time.Second)
 			defer t.Stop()
 			select {
 			case <-t.C:
-				m.consumeProcessor(work)
+				err = work.Consumer(m.nsqConfig, m.config.ConsumeAddr, m.config.Interval, m.config.UseSecurity)
+				if err != nil {
+					fmt.Println("ERR:", err)
+					return
+				}
 			}
 		} else {
-			m.consumeProcessor(work)
+			err = work.Consumer(m.nsqConfig, m.config.ConsumeAddr, m.config.Interval, m.config.UseSecurity)
+			if err != nil {
+				fmt.Println("ERR:", err)
+				return
+			}
 		}
 	}(delay)
 }
