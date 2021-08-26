@@ -25,12 +25,11 @@ type Worker interface {
 }
 
 type work struct {
-	consumer *nsq.Consumer
-	once     sync.Once
-	closed   chan bool
-	message  chan *nsq.Message
-	topic    string
-	channel  string
+	once    sync.Once
+	closed  chan bool
+	message chan *nsq.Message
+	topic   string
+	channel string
 }
 
 func (w *work) Closed() bool {
@@ -54,20 +53,28 @@ func (w *work) Consumer(config *nsq.Config, addr string, interval time.Duration,
 }
 
 func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, security bool) error {
+	if w.Closed() {
+		return ErrWorkClosed
+	}
 	consumer, err := nsq.NewConsumer(w.Topic(), w.Channel(), config)
 	if err != nil {
 		return err
 	}
+	defer consumer.Stop()
 	consumer.AddHandler(w)
 	t := time.NewTimer(interval * time.Second)
 	defer t.Stop()
 	for {
 		select {
 		case _, _ = <-w.closed:
+			if DEBUG {
+				fmt.Println("disconnect from:", addr)
+			}
 			if security {
 				if DEBUG {
 					//fmt.Println("ConnectToNSQD")
 				}
+				consumer.IsStarved()
 				err = consumer.DisconnectFromNSQD(addr)
 			} else {
 				if DEBUG {
@@ -100,10 +107,6 @@ func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, 
 
 func (w *work) Stop() {
 	w.once.Do(func() {
-		if w.consumer != nil {
-			w.consumer.Stop()
-			w.consumer = nil
-		}
 		w.closed <- true
 		close(w.closed)
 	})
