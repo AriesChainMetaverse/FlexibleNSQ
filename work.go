@@ -109,6 +109,7 @@ func (w *work) Stop() {
 	w.once.Do(func() {
 		w.closed <- true
 		close(w.closed)
+		close(w.message)
 	})
 
 }
