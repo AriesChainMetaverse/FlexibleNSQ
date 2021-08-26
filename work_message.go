@@ -72,6 +72,9 @@ func (m *WorkMessage) Data() []byte {
 	return m.msg().Data()
 }
 
-func (m *WorkMessage) NewWork(data []byte, last int64) Worker {
-	return NewPublishWorker(m.Topic(), NewMessageData(m.ID(), m.Topic(), last, data))
+func (m *WorkMessage) NewPublisher(data []byte, last int64) Publisher {
+	return &publisher{
+		topic:   m.Topic(),
+		message: NewMessageData(m.ID(), m.Topic(), last, data),
+	}
 }
