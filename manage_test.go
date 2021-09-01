@@ -64,12 +64,14 @@ func TestManage_StartRegisterClient(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		worker := manage.RegisterWorker("rnd"+strconv.Itoa(i), "client1")
-		manage.Publisher(worker.NewPublisher(fnsq.NewMessageData(
+		msg := fnsq.NewMessageData(
 			"client1",
 			"rnd"+strconv.Itoa(i),
 			time.Now().UnixNano(),
 			[]byte(str),
-		)))
+		)
+		fmt.Println("message size:", len(msg))
+		manage.Publisher(worker.NewPublisher(msg))
 	}
 
 	go func() {

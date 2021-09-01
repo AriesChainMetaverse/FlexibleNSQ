@@ -7,6 +7,7 @@ type Server interface {
 	Stop()
 	Wait()
 	Publisher(pub Publisher)
+	PublishMessage(topic string, message []byte)
 }
 
 func (m *manageServer) Publisher(pub Publisher) {
@@ -27,7 +28,7 @@ func (m *manageServer) Wait() {
 	m.manage().Wait()
 }
 
-func (m *manageServer) PublicMessage(topic string, message []byte) {
+func (m *manageServer) PublishMessage(topic string, message []byte) {
 	m.manage().PublishMessage(topic, message)
 }
 
