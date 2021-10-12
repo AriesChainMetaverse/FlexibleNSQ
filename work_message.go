@@ -48,7 +48,12 @@ func NewMessageData(id string, topic string, last int64, data []byte) []byte {
 	return builder.FinishedBytes()
 }
 
-func ParseMessage(data []byte) *WorkMessage {
+func ParseMessage(data []byte) (wm *WorkMessage) {
+	defer func() {
+		if err := recover(); err != nil {
+			wm = nil
+		}
+	}()
 	return (*WorkMessage)(message.GetRootAsMessage(data, 0))
 }
 
