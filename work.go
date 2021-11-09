@@ -1,6 +1,7 @@
 package fnsq
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -20,28 +21,37 @@ type Worker interface {
 	Topic() string
 	Channel() string
 	Message() <-chan *nsq.Message
+	Context() context.Context
 	Closed() bool
-	Stop()
+	Destroy()
+	HookDestroy(fn func(worker Worker))
 }
 
 type work struct {
-	once    sync.Once
-	closed  chan bool
-	message chan *nsq.Message
-	topic   string
-	channel string
+	ctx       context.Context
+	cancel    context.CancelFunc
+	once      sync.Once
+	message   chan *nsq.Message
+	topic     string
+	channel   string
+	onDestroy func(worker Worker)
+}
+
+func (w *work) Context() context.Context {
+	return w.ctx
+}
+
+func (w *work) HookDestroy(fn func(worker Worker)) {
+	w.onDestroy = fn
 }
 
 func (w *work) Closed() bool {
 	select {
-	case v, b := <-w.closed:
-		if b {
-			return v
-		}
+	case <-w.ctx.Done():
 		return true
 	default:
+		return false
 	}
-	return false
 }
 
 func (w *work) Message() <-chan *nsq.Message {
@@ -56,6 +66,7 @@ func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, 
 	if w.Closed() {
 		return ErrWorkClosed
 	}
+	defer w.Destroy()
 	consumer, err := nsq.NewConsumer(w.Topic(), w.Channel(), config)
 	if err != nil {
 		return err
@@ -66,57 +77,45 @@ func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, 
 	defer t.Stop()
 	for {
 		select {
-		case _, _ = <-w.closed:
+		case <-w.ctx.Done():
 			if DEBUG {
 				fmt.Println("disconnect from:", addr)
 			}
-			if security {
-				if DEBUG {
-					//fmt.Println("ConnectToNSQD")
-				}
-				consumer.IsStarved()
-				err = consumer.DisconnectFromNSQD(addr)
-			} else {
-				if DEBUG {
-					//fmt.Println("ConnectToNSQLookupd")
-				}
-				err = consumer.DisconnectFromNSQLookupd(addr)
-				if err != nil {
-
-				}
-			}
+			return nil
 		case <-t.C:
 			if security {
-				if DEBUG {
-					//fmt.Println("ConnectToNSQD")
-				}
 				err = consumer.ConnectToNSQD(addr)
 			} else {
-				if DEBUG {
-					//fmt.Println("ConnectToNSQLookupd")
-				}
 				err = consumer.ConnectToNSQLookupd(addr)
-				if err != nil {
-
-				}
+			}
+			if err != nil {
+				return err
 			}
 			t.Reset(interval * time.Second)
 		}
 	}
 }
 
-func (w *work) Stop() {
+func (w *work) Destroy() {
 	w.once.Do(func() {
-		w.closed <- true
-		close(w.closed)
+		if w.cancel != nil {
+			w.cancel()
+			w.cancel = nil
+		}
 		close(w.message)
+		if w.onDestroy != nil {
+			w.onDestroy(w)
+			w.onDestroy = nil
+		}
 	})
 
 }
 
-func NewWorker(topic string, channel string) Worker {
+func NewWorker(ctx context.Context, topic string, channel string) Worker {
+	ctx, cancel := context.WithCancel(ctx)
 	return &work{
-		closed:  make(chan bool, 1),
+		ctx:     ctx,
+		cancel:  cancel,
 		topic:   topic,
 		message: make(chan *nsq.Message, 1024),
 		channel: channel,

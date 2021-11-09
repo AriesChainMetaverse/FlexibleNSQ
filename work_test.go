@@ -1,6 +1,7 @@
 package fnsq
 
 import (
+	"context"
 	"testing"
 )
 
@@ -20,12 +21,12 @@ func TestNewWorker(t *testing.T) {
 				topic:   "topic1",
 				channel: "channel1",
 			},
-			want: NewWorker("topic1", "channel1"),
+			want: NewWorker(context.TODO(), "topic1", "channel1"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewWorker(tt.args.topic, tt.args.channel)
+			got := NewWorker(context.TODO(), tt.args.topic, tt.args.channel)
 			if got.Topic() != tt.want.Topic() {
 				t.Errorf("NewWorker() = %v, want %v", got, tt.want)
 			}
@@ -62,7 +63,7 @@ func TestNewWorker_Closed(t *testing.T) {
 				channel: "channel1",
 			},
 			action: func(worker Worker) {
-				worker.Stop()
+				worker.Destroy()
 			},
 			want: true,
 		},
@@ -73,15 +74,15 @@ func TestNewWorker_Closed(t *testing.T) {
 				channel: "channel1",
 			},
 			action: func(worker Worker) {
-				worker.Stop()
-				worker.Stop()
+				worker.Destroy()
+				worker.Destroy()
 			},
 			want: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewWorker(tt.args.topic, tt.args.channel)
+			got := NewWorker(context.Background(), tt.args.topic, tt.args.channel)
 			if tt.action != nil {
 				tt.action(got)
 			}

@@ -77,7 +77,7 @@ func (m *manage) DestroyWorker(topic string) bool {
 	m.workerLock.Lock()
 	delete(m.workers, topic)
 	m.workerLock.Unlock()
-	workers.Stop()
+	workers.Destroy()
 	return true
 }
 
@@ -103,7 +103,10 @@ func (m *manage) Publisher(pub Publisher) {
 }
 
 func (m *manage) registerConsumeWorker(topic string, channel string, delay int) Worker {
-	_work := NewWorker(topic, channel)
+	_work := NewWorker(m.ctx, topic, channel)
+	_work.HookDestroy(func(worker Worker) {
+		m.DestroyWorker(worker.Topic())
+	})
 	m.addWorker(_work)
 	m.consumeWorker(_work, delay)
 	return _work
@@ -127,31 +130,30 @@ func (m *manage) register(topic, channel string) Worker {
 }
 
 func (m *manage) consumeWorker(work Worker, delay int) {
-	go func(delay int) {
-		var err error
-		if delay != 0 {
-			t := time.NewTimer(time.Duration(delay) * time.Second)
-			defer t.Stop()
-			select {
-			case <-t.C:
+	var err error
+	if delay != 0 {
+		go func(delay int) {
+			t := time.AfterFunc(time.Duration(delay)*time.Second, func() {
 				err = work.Consumer(m.nsqConfig, m.config.ConsumeAddr, m.config.Interval, m.config.UseSecurity)
 				if err != nil {
 					fmt.Println("ERR:", err)
 					return
 				}
-			}
-		} else {
-			err = work.Consumer(m.nsqConfig, m.config.ConsumeAddr, m.config.Interval, m.config.UseSecurity)
-			if err != nil {
-				fmt.Println("ERR:", err)
-				return
-			}
+			})
+			defer t.Stop()
+		}(delay)
+		return
+	}
+	go func() {
+		err = work.Consumer(m.nsqConfig, m.config.ConsumeAddr, m.config.Interval, m.config.UseSecurity)
+		if err != nil {
+			fmt.Println("ERR:", err)
+			return
 		}
-	}(delay)
+	}()
 }
 
 func (m *manage) Start() {
-	//m.register(topic, channel)
 	m.start()
 }
 
