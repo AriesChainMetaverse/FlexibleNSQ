@@ -62,7 +62,7 @@ func (w *work) Consumer(config *nsq.Config, addr string, interval time.Duration,
 	return w.connect(config, addr, interval, security)
 }
 
-func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, security bool) error {
+func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, _ bool) error {
 	if w.Closed() {
 		return ErrWorkClosed
 	}
@@ -73,25 +73,23 @@ func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, 
 	}
 	defer consumer.Stop()
 	consumer.AddHandler(w)
+
 	t := time.NewTimer(interval * time.Second)
 	defer t.Stop()
 	for {
 		select {
 		case <-w.ctx.Done():
 			if DEBUG {
-				fmt.Println("disconnect from:", addr)
+				fmt.Println("disconnect to: ", addr)
 			}
 			return nil
 		case <-t.C:
-			if security {
-				err = consumer.ConnectToNSQD(addr)
-			} else {
-				err = consumer.ConnectToNSQLookupd(addr)
-			}
+			err = consumer.ConnectToNSQLookupd(addr)
 			if err != nil {
-				return err
+				t.Reset(interval * time.Second)
+				continue
 			}
-			t.Reset(interval * time.Second)
+			return nil
 		}
 	}
 }
