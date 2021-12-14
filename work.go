@@ -31,6 +31,7 @@ type work struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 	once      sync.Once
+	consumer  *nsq.Consumer
 	message   chan *nsq.Message
 	topic     string
 	channel   string
@@ -66,13 +67,14 @@ func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, 
 	if w.Closed() {
 		return ErrWorkClosed
 	}
-	defer w.Destroy()
-	consumer, err := nsq.NewConsumer(w.Topic(), w.Channel(), config)
+	//defer w.Destroy()
+	var err error
+	w.consumer, err = nsq.NewConsumer(w.Topic(), w.Channel(), config)
 	if err != nil {
 		return err
 	}
-	defer consumer.Stop()
-	consumer.AddHandler(w)
+	//defer consumer.Stop()
+	w.consumer.AddHandler(w)
 
 	t := time.NewTimer(interval * time.Second)
 	defer t.Stop()
@@ -84,7 +86,7 @@ func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, 
 			}
 			return nil
 		case <-t.C:
-			err = consumer.ConnectToNSQLookupd(addr)
+			err = w.consumer.ConnectToNSQLookupd(addr)
 			if err != nil {
 				t.Reset(interval * time.Second)
 				continue
@@ -96,6 +98,7 @@ func (w *work) connect(config *nsq.Config, addr string, interval time.Duration, 
 
 func (w *work) Destroy() {
 	w.once.Do(func() {
+		w.consumer.Stop()
 		if w.cancel != nil {
 			w.cancel()
 			w.cancel = nil
